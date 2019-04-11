@@ -1,0 +1,102 @@
+import torch
+import torch.nn.functional as F
+
+
+def format_loss_header():
+    return ' '.join(['%10s'] * 10) % (
+        'KLD', 'F_RECON', 'F_FAKE',
+        'G_RECON', 'G_FAKE', 'D_REAL', 'D_RECON', 'D_FAKE', 'TOTAL', '[PIXEL]',
+    )
+
+
+def format_loss_dict(loss):
+    total = sum(v for k, v in loss.items() if k != 'pixel')
+    return ' '.join(['%10.2e'] * 10) % (
+        loss['latent'],
+        loss['feats_recon'], loss['feats_fake'],
+        loss['gen_recon'], loss['gen_fake'],
+        loss['disc_orig'], loss['disc_recon'], loss['disc_fake'],
+        total, loss['pixel'],
+    )
+
+
+class Loss:
+    def __init__(
+            self, pixel, latent,
+            feats_recon, feats_fake,
+            disc_orig, disc_recon, disc_fake,
+            gen_recon, gen_fake,
+    ):
+        self.pixel = pixel
+        self.latent = latent
+        self.feats_recon = feats_recon
+        self.feats_fake = feats_fake
+        self.disc_orig = disc_orig
+        self.disc_recon = disc_recon
+        self.disc_fake = disc_fake
+        self.gen_recon = gen_recon
+        self.gen_fake = gen_fake
+
+    def to_dict(self):
+        return {
+            'pixel': self.pixel.item(),
+            'latent': self.latent.item(),
+            'feats_recon': self.feats_recon.item(),
+            'feats_fake': self.feats_fake.item(),
+            'disc_orig': self.disc_orig.item(),
+            'disc_recon': self.disc_recon.item(),
+            'disc_fake': self.disc_fake.item(),
+            'gen_recon': self.gen_recon.item(),
+            'gen_fake': self.gen_fake.item(),
+        }
+
+
+def kld_loss(mean, logvar):
+    return - 0.5 * (1 + logvar - mean.pow(2) - logvar.exp())
+
+
+def _bce(var, target):
+    if target == 1:
+        target = torch.ones_like(var, dtype=torch.float)
+    elif target == 0:
+        target = torch.zeros_like(var, dtype=torch.float)
+    else:
+        raise ValueError('Unexpected target value: %s' % target)
+    return F.binary_cross_entropy(input=var, target=target)
+
+
+def loss_func(output):
+    """Compute various loss
+
+    Parameters
+    ----------
+    output : ModelOutput
+
+    Returns
+    -------
+    LossRecord
+    """
+    pixel = F.mse_loss(output.orig, output.recon)
+
+    f_recon = F.mse_loss(input=output.feats_recon, target=output.feats_orig)
+    f_fake = F.mse_loss(input=output.feats_fake, target=output.feats_orig)
+
+    latent = torch.mean(kld_loss(*output.latent))
+
+    disc_orig = _bce(output.preds_orig, 1)
+    disc_recon = _bce(output.preds_recon, 0)
+    disc_fake = _bce(output.preds_fake, 0)
+    gen_recon = _bce(output.preds_recon, 1)
+    gen_fake = _bce(output.preds_fake, 1)
+
+    return Loss(
+        pixel=pixel,
+        latent=latent,
+        feats_recon=f_recon,
+        feats_fake=f_fake,
+        disc_orig=disc_orig,
+        disc_recon=disc_recon,
+        disc_fake=disc_fake,
+        gen_recon=gen_recon,
+        gen_fake=gen_fake,
+    )
