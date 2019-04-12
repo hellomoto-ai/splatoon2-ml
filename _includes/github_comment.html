@@ -1,0 +1,37 @@
+<div class="blog-post-comments"></div>
+
+<script
+  src="https://code.jquery.com/jquery-3.3.1.min.js"
+  integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+  crossorigin="anonymous"></script>
+<script>
+const apiUrl = 'https://api.github.com/repos/hellomoto-ai/splatoon2-ml/issues/{{include.issue}}/comments'
+$(function() { 
+  $.ajax(apiUrl, {
+    headers: {
+        Accept: 'application/vnd.github.v3.html+json'
+    },
+    dataType: 'json',
+    success: function(comments) {
+      const $commentSection = $('.blog-post-comments')
+      $commentSection.append(
+      `
+      <a href="https://github.com/hellomoto-ai/splatoon2-ml/issues/{{include.issue}}#new_comment_field">Visit GitHub to leave a comment.</a>
+      `
+      )
+      comments.forEach(function (comment) {
+        $commentSection.append(
+          `
+          <div class="comment">
+              ${comment.body_html}
+              <a class="commenter" href="${comment.user.html_url}" 
+              target="_blank">${comment.user.login}</a>
+              ${new Date(comment.created_at).toUTCString()}
+          </div>
+          `
+        )
+      })
+    }
+  })
+})	  
+</script>

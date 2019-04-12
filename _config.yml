@@ -1,0 +1,43 @@
+# Permalinks
+#
+# Use of `relative_permalinks` ensures post links from the index work properly.
+permalink:           pretty
+
+# Setup
+title:               "Fun with ML"
+tagline:             "on Splatoon 2"
+url:                 https://hellomoto-ai.github.io
+paginate:            10
+paginate_path:       "blog/page:num"
+baseurl:             /splatoon2-ml
+
+# Assets
+#
+# We specify the directory for Jekyll so we can use @imports.
+sass:
+  sass_dir:          _sass
+  style:            :compressed
+
+excerpt_separator: <!--more-->
+
+# About/contact
+author:
+  name:              moto
+  url:               https://github.com/hellomoto-ai
+  email:             moto@hellomoto.ai
+
+# Custom vars
+version:             2.0.0
+github:
+  repo:              https://github.com/hellomoto-ai/splatoon2-ml
+
+# Pulgins
+plugins:
+  - jekyll-paginate
+  - jekyll-gist
+  - jekyll-feed
+
+# Page list
+pages_list:
+  About: '/splatoon2-ml/about'
+  Archive: '/splatoon2-ml/archive'

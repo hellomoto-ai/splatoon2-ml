@@ -1,0 +1,117 @@
+---
+layout: post
+title:  "VAE-GAN on Splatoon 2"
+date:   2019-04-11 00:00:00 +0000
+categories: vae-gan
+mathjax: true
+---
+
+<style>
+ tbody tr:nth-child(odd) td{
+     background: none;
+     background-color: transparent;
+ }
+ td {
+     border: none;
+ }
+ table {
+     border: none;
+ }
+ a {
+     text-decoration: underline;
+ }
+ p {
+     text-align: justify;
+ }
+</style>
+
+<p>
+    I built VAE-GAN and trained models with Splatoon 2 video screens.
+</p>
+
+<table>
+    <tbody>
+    <tr>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-11/images/equip.gif"/></center></td>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-11/images/turf_battle.gif"/></center></td>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-11/images/green_and_orange.gif"/></center></td>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-11/images/map.gif"/></center></td>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-11/images/splash.gif"/></center></td>
+    </tr>
+    <tr>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-11/images/yellow.gif"/></center></td>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-11/images/purple_and_green.gif"/></center></td>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-11/images/finish.gif"/></center></td>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-11/images/winered_and_green.gif"/></center></td>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-11/images/judges.gif"/></center></td>
+    </tr>
+    </tbody>
+</table>
+
+<!--more-->
+
+<p>
+    I started from AE, then VAE and finally moved onto VAE-GAN. Introducing GAN was tricky. Unlike AE or VAE, which at least produce something resemble input images, GAN does not produce anything if the training is not setup correctly. I refered <a target="_blank" href="http://torch.ch/blog/2015/11/13/gan.html">Torch blog</a>, <a target="_blank" href="https://github.com/lucabergamini/VAEGAN-PYTORCH">lucabergamini's implementation</a> and <a target="_blank" href="https://towardsdatascience.com/gan-ways-to-improve-gan-performance-acf37f9f59b">Jonathan Hui's post</a>, and employed different tricks to make it work, but at the end the most simplest form with only feature matching applied. The loss function at this point is as follow;
+
+    <div align="center">
+	$$
+	\begin{align*}
+	\mathcal{L} &= KLD + \mathcal{L}_{D} + \mathcal{L}_{G} + \mathcal{L}_{F}
+	\end{align*}
+	$$
+	$$
+	\begin{align*}
+	KLD &= \mathbb{E}[D_{KL}(\mathcal{N} \| P(z | x) )] \\
+	\mathcal{L}_{D} &= \mathbb{E}[\log(D(x))] + \mathbb{E}[\log(1 - D(G(z|x)))] + \mathbb{E}[\log(1 - D(G(z)))] \\
+	\mathcal{L}_{G} &= \mathbb{E}[\log(D(G(z|x)))] + \mathbb{E}[\log(D(G(z)))] \\
+	\mathcal{L}_{F} &= \mathbb{E}[{\| \phi(G(z|x)) - \phi(x) \|}^2]  + \mathbb{E}[{\| \phi(G(z)) - \phi(x) \|}^2]
+	\end{align*}
+	$$
+    </div>
+
+    which is sum of KL divergence, discriminator loss, generator loss and feature matching error.
+</p>
+
+<p>
+    In addition to these losses, I also tracked pixel error between input images and reconstructed images.
+    <div align="center">
+	$$
+	\mathcal{L}_{pixel} = \mathbb{E}[{\|x - G(z|x)\|}^2]
+	$$
+    </div>
+
+</p>
+
+<p>
+    Let's see how these metrics change as training progresses. Firstly, the pixel loss. Though <u>it is not optimized by any optimizer</u>, it shows a nice learning curve.
+</p>
+
+<center><img src="{{ site.baseurl }}/assets/2019-04-11/images/pixel.svg"></center>
+<p>
+    Next is discriminator and generator loss. It is not easy to get insights just from this, but in combination with other observations, there are some hypothesis we can make.
+</p>
+<center><img src="{{ site.baseurl }}/assets/2019-04-11/images/gan.svg"></center>
+<ol>
+    <li>Fake images $G(z), z \sim \mathcal{N}$ do not contribute to the optimization.</li>
+    The discriminator loss is always smaller than the rest by orders of magnitude, occasionally reaching zero, meaning it is not providing a good feedback to generator. In fact, the fake images do not resemble real image at all.
+    <li>In training, the discriminator found original images and reconstructed images equally difficult to tell.</li>
+</ol>
+<p>
+    The following figure is the same GAN loss without fake images.
+</p>
+<center><img src="{{ site.baseurl }}/assets/2019-04-11/images/gan_without_fake.svg"></center>
+
+<p>
+
+<p>
+    Now, the interesting part. <u>The feature matching loss increases as training progresses while pixel loss is decreasing.</u> In the current implementation, the feature is computed as multiple convolutions without any non-linear activation. (I do not know if lack of non-linearity is an issue here.) This means that discriminator is working in a way that it amplifies the difference between original images and reconstructed images.
+</p>
+<center><img src="{{ site.baseurl }}/assets/2019-04-11/images/feats.svg"></center>
+
+<p>
+    Finally, something puzzling me. The KL divergence of encoded vectors increases. The latent expression of input images are not pushed to Gaussian distribution. Generator-descriminator scheme is pushing latent vector outside of normal distribution. This explains why fake images generated from random sample drawn from normal distribution do not resemble any real. This is strange. This model is supposed to be a VAE and GAN, both of which should allow sampling from normal distribution. The increased KLD trait might be somewhat connected to <a target="_blank" href="https://arxiv.org/abs/1804.03599">Disentangling $\beta$-VAE</a>, in which KL divergence is constrained to be close to capacity constant.
+</p>
+<center><img src="{{ site.baseurl }}/assets/2019-04-11/images/kld.svg"></center>
+
+
+{% include github_comment.html issue="1" %}
