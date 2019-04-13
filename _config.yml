@@ -41,3 +41,5 @@ plugins:
 pages_list:
   About: '/splatoon2-ml/about'
   Archive: '/splatoon2-ml/archive'
+
+theme: jekyll-theme-slate
