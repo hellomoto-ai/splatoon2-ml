@@ -51,7 +51,7 @@ mathjax: true
 <!--more-->
 
 <p>
-    I started from AE, then VAE and finally moved onto VAE-GAN. Introducing GAN was tricky. Unlike AE or VAE, which at least produce something resemble input images, GAN does not produce anything if the training is not setup correctly. I refered <a target="_blank" href="http://torch.ch/blog/2015/11/13/gan.html">Torch blog</a>, <a target="_blank" href="https://github.com/lucabergamini/VAEGAN-PYTORCH">lucabergamini's implementation</a> and <a target="_blank" href="https://towardsdatascience.com/gan-ways-to-improve-gan-performance-acf37f9f59b">Jonathan Hui's post</a>, and employed different tricks to make it work, but at the end the most simplest form with only feature matching applied. The loss function at this point is as follow;
+    I started from AE, then VAE and finally moved onto VAE-GAN. Introducing GAN was tricky. Unlike AE or VAE, which at least produce something resemble input images, GAN does not produce anything if the training is not setup correctly. I refered <a target="_blank" href="http://torch.ch/blog/2015/11/13/gan.html">Torch blog</a>, <a target="_blank" href="https://github.com/lucabergamini/VAEGAN-PYTORCH">lucabergamini's implementation</a> and <a target="_blank" href="https://towardsdatascience.com/gan-ways-to-improve-gan-performance-acf37f9f59b">Jonathan Hui's post</a>, and employed different tricks to make it work, but luckily I could make it work with almost vanilla form. The loss function at this point is as follow;
 
     <div align="center">
 	$$
@@ -83,7 +83,7 @@ mathjax: true
 </p>
 
 <p>
-    Let's see how these metrics change as training progresses. Firstly, the pixel loss. Though <u>it is not optimized by any optimizer</u>, it shows a nice learning curve.
+    Let's see how these metrics change as training progresses. Firstly, the pixel loss. Though <u>it is not directly optimized</u>, it shows a nice learning curve.
 </p>
 
 <center><img src="{{ site.baseurl }}/assets/2019-04-11/images/pixel.svg"></center>
@@ -109,7 +109,10 @@ mathjax: true
 <center><img src="{{ site.baseurl }}/assets/2019-04-11/images/feats.svg"></center>
 
 <p>
-    Finally, something puzzling me. The KL divergence of encoded vectors increases. The latent expression of input images are not pushed to Gaussian distribution. Generator-descriminator scheme is pushing latent vector outside of normal distribution. This explains why fake images generated from random sample drawn from normal distribution do not resemble any real. This is strange. This model is supposed to be a VAE and GAN, both of which should allow sampling from normal distribution. The increased KLD trait might be somewhat connected to <a target="_blank" href="https://arxiv.org/abs/1804.03599">Disentangling $\beta$-VAE</a>, in which KL divergence is constrained to be close to capacity constant.
+    Finally, something puzzling me. The KL divergence of encoded vectors increases. The latent expression of input images are not pushed to Gaussian distribution. Generator-descriminator scheme is pushing latent vector outside of normal distribution. This explains why fake images generated from random sample drawn from normal distribution do not resemble any real. This is strange. This model is supposed to be a VAE and GAN, both of which should allow sampling from normal distribution. The increased KLD trait might be somewhat connected to <a target="_blank" href="https://arxiv.org/abs/1804.03599">Disentangling β-VAE</a>, in which KL divergence is constrained to be close to capacity constant.
+</p>
+<p>
+    Maybe, the use of inistance normalization, instead of batch normalization, is causing this. 
 </p>
 <center><img src="{{ site.baseurl }}/assets/2019-04-11/images/kld.svg"></center>
 
