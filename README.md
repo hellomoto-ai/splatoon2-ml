@@ -2,17 +2,19 @@
 
 VAE-GAN code and model trained on Splatoon 2 game screens.
 
-![](https://github.com/hellomoto-ai/vae-gan-splatoon-2/blob/results/results/20190419-1daa009/images/equip.gif?raw=true "Equip")
-![](https://github.com/hellomoto-ai/vae-gan-splatoon-2/blob/results/results/20190419-1daa009/images/turf_battle.gif?raw=true "Turf Battle")
-![](https://github.com/hellomoto-ai/vae-gan-splatoon-2/blob/results/results/20190419-1daa009/images/green_and_orange.gif?raw=true "Green and Orange")
-![](https://github.com/hellomoto-ai/vae-gan-splatoon-2/blob/results/results/20190419-1daa009/images/map.gif?raw=true "Map")
-![](https://github.com/hellomoto-ai/vae-gan-splatoon-2/blob/results/results/20190419-1daa009/images/splash.gif?raw=true "Splash")
+![](https://raw.githubusercontent.com/hellomoto-ai/splatoon2-ml/62adac7364ae03caae9b5b1fde46279857aaaed4/assets/2019-04-11/images/equip.gif?raw=true "Equip")
+![](https://raw.githubusercontent.com/hellomoto-ai/splatoon2-ml/62adac7364ae03caae9b5b1fde46279857aaaed4/assets/2019-04-11/images/turf_battle.gif?raw=true "Turf Battle")
+![](https://raw.githubusercontent.com/hellomoto-ai/splatoon2-ml/62adac7364ae03caae9b5b1fde46279857aaaed4/assets/2019-04-11/images/green_and_orange.gif?raw=true "Green and Orange")
+![](https://raw.githubusercontent.com/hellomoto-ai/splatoon2-ml/62adac7364ae03caae9b5b1fde46279857aaaed4/assets/2019-04-11/images/map.gif?raw=true "Map")
+![](https://raw.githubusercontent.com/hellomoto-ai/splatoon2-ml/62adac7364ae03caae9b5b1fde46279857aaaed4/assets/2019-04-11/images/splash.gif?raw=true "Splash")
 
-![](https://github.com/hellomoto-ai/vae-gan-splatoon-2/blob/results/results/20190419-1daa009/images/yellow.gif?raw=true "Yellow")
-![](https://github.com/hellomoto-ai/vae-gan-splatoon-2/blob/results/results/20190419-1daa009/images/purple_and_green.gif?raw=true "Purple and Green")
-![](https://github.com/hellomoto-ai/vae-gan-splatoon-2/blob/results/results/20190419-1daa009/images/finish.gif?raw=true "Finish line")
-![](https://github.com/hellomoto-ai/vae-gan-splatoon-2/blob/results/results/20190419-1daa009/images/winered_and_green.gif?raw=true "Winered and Green")
-![](https://github.com/hellomoto-ai/vae-gan-splatoon-2/blob/results/results/20190419-1daa009/images/judges.gif "Judges")
+![](https://raw.githubusercontent.com/hellomoto-ai/splatoon2-ml/62adac7364ae03caae9b5b1fde46279857aaaed4/assets/2019-04-11/images/yellow.gif?raw=true "Yellow")
+![](https://raw.githubusercontent.com/hellomoto-ai/splatoon2-ml/62adac7364ae03caae9b5b1fde46279857aaaed4/assets/2019-04-11/images/purple_and_green.gif?raw=true "Purple and Green")
+![](https://raw.githubusercontent.com/hellomoto-ai/splatoon2-ml/62adac7364ae03caae9b5b1fde46279857aaaed4/assets/2019-04-11/images/finish.gif?raw=true "Finish line")
+![](https://raw.githubusercontent.com/hellomoto-ai/splatoon2-ml/62adac7364ae03caae9b5b1fde46279857aaaed4/assets/2019-04-11/images/winered_and_green.gif?raw=true "Winered and Green")
+![](https://raw.githubusercontent.com/hellomoto-ai/splatoon2-ml/62adac7364ae03caae9b5b1fde46279857aaaed4/assets/2019-04-11/images/judges.gif "Judges")
+
+Check out the detail from [here](https://hellomoto-ai.github.io/splatoon2-ml/).
 
 ## Requirements
 
@@ -46,9 +48,3 @@ In the end we had 296 different videos, which are around 3 to 5 minutes, with 44
 ```
 ./train_vae_gan.py --train-flist TRAIN_FLIST --test-flist TEST_FLIST --data-dir DATA_DIR
 ```
-
-## References
-
-- http://torch.ch/blog/2015/11/13/gan.html
-- https://towardsdatascience.com/gan-ways-to-improve-gan-performance-acf37f9f59b
-- https://github.com/lucabergamini/VAEGAN-PYTORCH
