@@ -3,14 +3,17 @@ import torch.nn.functional as F
 
 
 def format_loss_header():
-    return ' '.join(['%10s'] * 6) % (
-        'KLD', 'F_RECON', 'G_RECON', 'D_REAL', 'D_RECON', '[PIXEL]')
+    return ' '.join(['%10s'] * 7) % (
+        'KLD', 'CAPACITY', 'F_RECON',
+        'G_RECON', 'D_REAL', 'D_RECON', '[PIXEL]',
+    )
 
 
 def format_loss_dict(loss):
-    return ' '.join(['%10.2e'] * 6) % (
-        loss['latent'], loss['feats_recon'], loss['gen_recon'],
-        loss['disc_orig'], loss['disc_recon'], loss['pixel'])
+    return ' '.join(['%10.2e'] * 7) % (
+        loss['latent'], loss['capacity'], loss['feats_recon'],
+        loss['gen_recon'], loss['disc_orig'], loss['disc_recon'], loss['pixel'],
+    )
 
 
 def kld_loss(mean, logvar):

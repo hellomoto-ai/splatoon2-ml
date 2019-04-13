@@ -36,6 +36,8 @@ class Trainer:
             self, model, optimizers,
             train_loader, test_loader,
             device, output_dir,
+            gamma=100.0,
+            cap_step=40000, cap_limit=5,
     ):
         self.model = model.float().to(device)
         self.train_loader = train_loader
@@ -44,7 +46,7 @@ class Trainer:
         self.device = device
         self.output_dir = output_dir
         fields = [
-            'PHASE', 'TIME', 'STEP', 'EPOCH', 'KLD', 'F_RECON',
+            'PHASE', 'TIME', 'STEP', 'EPOCH', 'KLD', 'CAPACITY', 'F_RECON',
             'G_RECON', 'D_REAL', 'D_RECON', 'PIXEL',
         ]
         logfile = open(os.path.join(output_dir, 'result.csv'), 'w')
@@ -53,10 +55,15 @@ class Trainer:
         self.step = 0
         self.epoch = 0
 
+        self.gamma = gamma
+        self.capacity_step = cap_step
+        self.capacity_limit = cap_limit
+
     def _write(self, phase, loss):
         self.writer.write(
             PHASE=phase, STEP=self.step, EPOCH=self.epoch, TIME=time.time(),
-            KLD=loss['latent'], F_RECON=loss['feats_recon'],
+            KLD=loss['latent'], CAPACITY=loss['capacity'],
+            F_RECON=loss['feats_recon'],
             G_RECON=loss['gen_recon'], D_REAL=loss['disc_orig'],
             D_RECON=loss['disc_recon'], PIXEL=loss['pixel'],
         )
@@ -121,6 +128,10 @@ class Trainer:
             'gen_recon': gen_loss.item(),
         }
 
+    def _get_capacity(self):
+        capacity = self.step * self.capacity_limit / self.capacity_step
+        return min(capacity, self.capacity_limit)
+
     def _forward_vae(self, orig, update=False):
         # Update feature
         recon, _ = self.model.vae(orig)
@@ -136,12 +147,15 @@ class Trainer:
         # Update latent
         latent = self.model.vae.encoder(orig)
         latent_loss = torch.mean(loss_utils.kld_loss(*latent))
+        cap = self._get_capacity()
         if update:
+            beta_latent_loss = self.gamma * torch.abs(latent_loss - cap)
             self.model.zero_grad()
-            latent_loss.backward()
+            beta_latent_loss.backward()
             self.optimizers['encoder'].step()
 
         return recon, {
+            'capacity': cap,
             'latent': latent_loss.item(),
             'feats_recon': feats_loss.item(),
         }
@@ -199,6 +213,11 @@ class Trainer:
         opt = '\n'.join([
             '%s: %s' % (key, val) for key, val in self.optimizers.items()
         ])
-        return 'Epoch: %d\nStep: %d\nModel: %s\nOptimizers: %s\n' % (
-            self.epoch, self.step, self.model, opt
+        capacity = '\n'.join([
+            'Gamma: %f' % self.gamma,
+            'Capacity Limit: %f' % self.capacity_limit,
+            'Capacity Period: %f' % self.capacity_step,
+        ])
+        return 'Epoch: %d\nStep: %d\nModel: %s\nOptimizers: %s\nCapacity: %s\n' % (
+            self.epoch, self.step, self.model, opt, capacity
         )
