@@ -43,9 +43,8 @@ class Trainer:
         self.device = device
         self.output_dir = output_dir
         fields = [
-            'PHASE', 'TIME', 'STEP', 'EPOCH',
-            'KLD', 'F_RECON', 'F_FAKE',
-            'G_RECON', 'G_FAKE', 'D_REAL', 'D_RECON', 'D_FAKE', 'PIXEL',
+            'PHASE', 'TIME', 'STEP', 'EPOCH', 'KLD', 'F_RECON',
+            'G_RECON', 'D_REAL', 'D_RECON', 'PIXEL',
         ]
         logfile = open(os.path.join(output_dir, 'result.csv'), 'w')
         self.writer = misc_utils.CSVWriter(fields, logfile)
@@ -56,11 +55,9 @@ class Trainer:
     def _write(self, phase, loss):
         self.writer.write(
             PHASE=phase, STEP=self.step, EPOCH=self.epoch, TIME=time.time(),
-            KLD=loss['latent'],
-            F_RECON=loss['feats_recon'], F_FAKE=loss['feats_fake'],
-            G_RECON=loss['gen_recon'], G_FAKE=loss['gen_fake'],
-            D_REAL=loss['disc_orig'], D_RECON=loss['disc_recon'],
-            D_FAKE=loss['disc_fake'], PIXEL=loss['pixel'],
+            KLD=loss['latent'], F_RECON=loss['feats_recon'],
+            G_RECON=loss['gen_recon'], D_REAL=loss['disc_orig'],
+            D_RECON=loss['disc_recon'], PIXEL=loss['pixel'],
         )
 
     def _forward(self, orig):
@@ -72,12 +69,9 @@ class Trainer:
         # TODO: Try loss-based balancing:
         # http://torch.ch/blog/2015/11/13/gan.html
 
-        # TODO: Try removing fake sampling and
-        # run update based on encoded sampling multiple times
-
         # Feature matching
         self.model.zero_grad()
-        (loss.feats_recon + loss.feats_fake).backward(retain_graph=True)
+        loss.feats_recon.backward(retain_graph=True)
         self.optimizers['encoder'].step()
         self.optimizers['decoder'].step()
 
@@ -96,25 +90,10 @@ class Trainer:
         loss.disc_recon.backward(retain_graph=True)
         self.optimizers['discriminator'].step()
 
-        # Discriminator loss - fake image
-        self.model.zero_grad()
-        loss.disc_fake.backward(retain_graph=True)
-        self.optimizers['discriminator'].step()
-
         # Generator loss - sampled image
         self.model.zero_grad()
-        loss.gen_recon.backward(retain_graph=True)
-        self.optimizers['decoder'].step()
-
-        # Generator loss - fake image
-        self.model.zero_grad()
-        loss.gen_fake.backward(retain_graph=True)
-        self.optimizers['decoder'].step()
-
-        # To free internal gradient buffer.
-        # reconstruction generator loss is connected to
-        # all the trainable variables.
         loss.gen_recon.backward()
+        self.optimizers['decoder'].step()
 
     def save(self):
         filename = 'epoch_%s_step_%s.pt' % (self.epoch, self.step)

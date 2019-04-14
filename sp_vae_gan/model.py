@@ -121,9 +121,9 @@ class Discriminator(nn.Module):
 
 ModelOutput = collections.namedtuple(
     'ModelOutput',
-    ['orig', 'latent', 'recon', 'fake',
-     'feats_orig', 'feats_recon', 'feats_fake',
-     'preds_orig', 'preds_recon', 'preds_fake'],
+    ['orig', 'latent', 'recon',
+     'feats_orig', 'feats_recon',
+     'preds_orig', 'preds_recon',],
 )
 
 
@@ -147,24 +147,17 @@ class VaeGan(nn.Module):
         """
         recon, latent = self.vae(orig)
 
-        z_random = torch.randn_like(latent[0], requires_grad=True)
-        fake = self.vae.decoder(z_random)
-
         preds_orig, feats_orig = self.discriminator(orig)
         preds_recon, feats_recon = self.discriminator(recon)
-        preds_fake, feats_fake = self.discriminator(fake)
 
         return ModelOutput(
             orig=orig,
             latent=latent,
             recon=recon,
-            fake=fake,
             feats_orig=feats_orig,
             feats_recon=feats_recon,
-            feats_fake=feats_fake,
             preds_orig=preds_orig,
             preds_recon=preds_recon,
-            preds_fake=preds_fake,
         )
 
 
