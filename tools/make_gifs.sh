@@ -9,5 +9,6 @@ fi
 
 base_dir="$1"
 while read dir; do
+    echo "Processing ${dir}"
     ./make_gifs.py -i "${dir}" -o "${dir}.gif"
 done < <(find "${base_dir}" ! -path "${base_dir}" -type d)
