@@ -3,20 +3,19 @@ import torch.nn.functional as F
 
 
 def format_loss_header():
-    return ' '.join(['%10s'] * 10) % (
+    return ' '.join(['%10s'] * 9) % (
         'KLD', 'F_RECON', 'F_FAKE',
-        'G_RECON', 'G_FAKE', 'D_REAL', 'D_RECON', 'D_FAKE', 'TOTAL', '[PIXEL]',
+        'G_RECON', 'G_FAKE', 'D_REAL', 'D_RECON', 'D_FAKE', '[PIXEL]',
     )
 
 
 def format_loss_dict(loss):
-    total = sum(v for k, v in loss.items() if k != 'pixel')
-    return ' '.join(['%10.2e'] * 10) % (
+    return ' '.join(['%10.2e'] * 9) % (
         loss['latent'],
         loss['feats_recon'], loss['feats_fake'],
         loss['gen_recon'], loss['gen_fake'],
         loss['disc_orig'], loss['disc_recon'], loss['disc_fake'],
-        total, loss['pixel'],
+        loss['pixel'],
     )
 
 
