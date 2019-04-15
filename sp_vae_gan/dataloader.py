@@ -1,8 +1,13 @@
 import os
+import logging
+import subprocess
 
+import numpy as np
 import torch.utils.data
 
 from sp_vae_gan import image_util
+
+_LG = logging.getLogger(__name__)
 
 
 def _load_frames(flist, root_dir):
@@ -45,6 +50,23 @@ class Dataset(torch.utils.data.Dataset):
         path, class_ = self.frames[idx]
         image = image_util.load_image(path, self.scale)
         return {'image': image, 'class': class_, 'path': path}
+
+
+class VideoDataset(torch.utils.data.Dataset):
+    """Extract frames from video"""
+    def __init__(
+            self, input_file, frame_rate=30, frame_dim=(121, 65), debug=False):
+        self.input_file = input_file
+        self.frame_rate = frame_rate
+        self.frame_width, self.frame_height = frame_dim
+        self.debug = debug
+
+    def __iter__(self):
+        yield from image_util.load_video(
+            path=self.input_file,
+            scale=(self.frame_width, self.frame_height),
+            frame_rate=self.frame_rate, debug=self.debug
+        )
 
 
 def get_dataloader(flist, data_dir, batch_size, scale, shuffle=True):
