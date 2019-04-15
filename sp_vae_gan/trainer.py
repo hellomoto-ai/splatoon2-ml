@@ -4,6 +4,7 @@ import logging
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 from sp_vae_gan import (
     image_util,
@@ -60,41 +61,6 @@ class Trainer:
             D_RECON=loss['disc_recon'], PIXEL=loss['pixel'],
         )
 
-    def _forward(self, orig):
-        output = self.model(orig.float().to(self.device))
-        loss = loss_utils.loss_func(output)
-        return output, loss
-
-    def _update(self, loss):
-        # TODO: Try loss-based balancing:
-        # http://torch.ch/blog/2015/11/13/gan.html
-
-        # Feature matching
-        self.model.zero_grad()
-        loss.feats_recon.backward(retain_graph=True)
-        self.optimizers['encoder'].step()
-        self.optimizers['decoder'].step()
-
-        # Latent update
-        self.model.zero_grad()
-        loss.latent.backward(retain_graph=True)
-        self.optimizers['encoder'].step()
-
-        # Discrimator loss - real image
-        self.model.zero_grad()
-        loss.disc_orig.backward(retain_graph=True)
-        self.optimizers['discriminator'].step()
-
-        # Discriminator loss - sampled image
-        self.model.zero_grad()
-        loss.disc_recon.backward(retain_graph=True)
-        self.optimizers['discriminator'].step()
-
-        # Generator loss - sampled image
-        self.model.zero_grad()
-        loss.gen_recon.backward()
-        self.optimizers['decoder'].step()
-
     def save(self):
         filename = 'epoch_%s_step_%s.pt' % (self.epoch, self.step)
         output = os.path.join(self.output_dir, 'checkpoints', filename)
@@ -120,15 +86,88 @@ class Trainer:
         self.epoch = data['epoch']
         self.step = data['step']
 
+    def _forward_gan(self, orig, update=False):
+        # TODO: Try loss-based balancing:
+        # http://torch.ch/blog/2015/11/13/gan.html
+
+        # 1. Update discriminator with original (real) image
+        preds_orig, _ = self.model.discriminator(orig)
+        disc_loss_orig = loss_utils.bce(preds_orig, 1)
+        if update:
+            self.model.zero_grad()
+            disc_loss_orig.backward()
+            self.optimizers['discriminator'].step()
+
+        # 2. Update discriminator with reconstructed (fake) image
+        recon, _ = self.model.vae(orig)
+        preds_recon, _ = self.model.discriminator(recon.detach())
+        disc_loss_recon = loss_utils.bce(preds_recon, 0)
+        if update:
+            self.model.zero_grad()
+            disc_loss_recon.backward()
+            self.optimizers['discriminator'].step()
+
+        # 3. Update generator
+        preds_recon, _ = self.model.discriminator(recon)
+        gen_loss = loss_utils.bce(preds_recon, 1)
+        if update:
+            self.model.zero_grad()
+            gen_loss.backward()
+            self.optimizers['decoder'].step()
+
+        return {
+            'disc_orig': disc_loss_orig.item(),
+            'disc_recon': disc_loss_recon.item(),
+            'gen_recon': gen_loss.item(),
+        }
+
+    def _forward_vae(self, orig, update=False):
+        # Update feature
+        recon, _ = self.model.vae(orig)
+        _, feats_orig = self.model.discriminator(orig)
+        _, feats_recon = self.model.discriminator(recon)
+        feats_loss = F.mse_loss(input=feats_recon, target=feats_orig)
+        if update:
+            self.model.zero_grad()
+            feats_loss.backward()
+            self.optimizers['encoder'].step()
+            self.optimizers['decoder'].step()
+
+        # Update latent
+        latent = self.model.vae.encoder(orig)
+        latent_loss = torch.mean(loss_utils.kld_loss(*latent))
+        if update:
+            self.model.zero_grad()
+            latent_loss.backward()
+            self.optimizers['encoder'].step()
+
+        return recon, {
+            'latent': latent_loss.item(),
+            'feats_recon': feats_loss.item(),
+        }
+
+    def _get_pixel_loss(self, orig):
+        recon, _ = self.model.vae(orig)
+        return F.mse_loss(orig, recon)
+
+    def _forward(self, orig, update=False):
+        loss_gan = self._forward_gan(orig, update=update)
+        recon, loss_vae = self._forward_vae(orig, update=update)
+        with torch.no_grad():
+            pixel_loss = self._get_pixel_loss(orig)
+
+        loss = {'pixel': pixel_loss.item()}
+        loss.update(loss_vae)
+        loss.update(loss_gan)
+        return recon, loss
+
     def train(self):
         self.model.train()
         _LG.info('         %s', loss_utils.format_loss_header())
         for i, batch in enumerate(self.train_loader):
-            _, loss = self._forward(batch['image'])
-            self._update(loss)
+            orig = batch['image'].float().to(self.device)
+            _, loss = self._forward(orig, update=True)
             self.step += 1
-
-            loss = loss.to_dict()
             self._write('train', loss)
             if i % 30 == 0:
                 progress = 100. * i / len(self.train_loader)
@@ -145,13 +184,13 @@ class Trainer:
         self.model.eval()
         accum = misc_utils.MeanTracker()
         for i, batch in enumerate(self.test_loader):
-            orig, path = batch['image'], batch['path']
-            output, loss = self._forward(orig)
-            accum.update(loss.to_dict())
+            orig, path = batch['image'].float().to(self.device), batch['path']
+            recon, loss = self._forward(orig, update=False)
+            accum.update(loss)
 
             if i % 10 == 0:
                 _save_images(
-                    (orig[0], output.recon[0]), path[0],
+                    (orig[0], recon[0]), path[0],
                     self.step, self.output_dir)
         self._write('test', accum)
         _LG.info('         %s', loss_utils.format_loss_dict(accum))

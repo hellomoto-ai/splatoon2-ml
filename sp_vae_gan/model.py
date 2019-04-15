@@ -123,7 +123,7 @@ ModelOutput = collections.namedtuple(
     'ModelOutput',
     ['orig', 'latent', 'recon',
      'feats_orig', 'feats_recon',
-     'preds_orig', 'preds_recon',],
+     'preds_orig', 'preds_recon'],
 )
 
 
