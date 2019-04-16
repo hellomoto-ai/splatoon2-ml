@@ -23,8 +23,8 @@
   <!-- RSS -->
   <link rel="alternate" type="application/atom+xml" title="{{ site.title }}" href="{{ site.baseurl }}/atom.xml">
 
-  <!-- MathJax -->
   {% if page.mathjax %}
+  <!-- MathJax -->
   <script type="text/x-mathjax-config">
    MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
   </script>
@@ -33,6 +33,7 @@
   </script>
   {% endif %}
 
+  {% if site.url contains  "github" %}
   <!-- Global site tag (gtag.js) - Google Analytics -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=UA-138235315-1"></script>
   <script>
@@ -42,4 +43,5 @@
 
    gtag('config', 'UA-138235315-1');
   </script>
+  {% endif %}
 </head>
