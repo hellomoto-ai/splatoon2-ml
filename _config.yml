@@ -20,7 +20,9 @@ sass:
 
 exclude:
   - tools
-  
+
+future: false
+
 excerpt_separator: <!--more-->
 
 # About/contact
