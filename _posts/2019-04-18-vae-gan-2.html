@@ -1,0 +1,77 @@
+---
+layout: post
+title:  "VAE-GAN Part 2"
+date:   2019-04-18 00:00:00 +0000
+categories: vae-gan
+mathjax: true
+---
+
+<p>
+    From the observation made in the previous post, I ran the same training, but without fake images genrated from random sample $z \sim \mathcal{N}(\mathbf{0}, \mathbf{1})$.
+</p>
+
+<center><img src="{{ site.baseurl }}/assets/2019-04-18/images/pixel.svg"></center>
+
+<!--more-->
+
+<p>
+    At the beginning, the pixel error seems to be fluctuating more than the original setting, but towards the end, such phenomenon is no longer observed.
+</p>
+
+<p>
+    Adversarial losses and KL divergence follow a pretty similar trait.
+</p>
+
+<center><img src="{{ site.baseurl }}/assets/2019-04-18/images/gan.svg"></center>
+
+<center><img src="{{ site.baseurl }}/assets/2019-04-18/images/kld.svg"></center>
+
+<p>
+    There is a descrepency in feature matching error but they seem to follow the similar trend.
+</p>
+
+<center><img src="{{ site.baseurl }}/assets/2019-04-18/images/feats.svg"></center>
+
+<p>
+    The fact that this VAE-GAN model does not produce any synthetic image that resembles the original data bothers me still. Maybe I should put a large weight on KL-divergence so that samples in latent space stay within a reasonable range of normal distribution $\mathcal{N}(\mathbf{0}, \mathbf{1})$.
+</p>
+
+<p>
+    Quality-wise, no noticible difference was observed.
+</p>
+
+<style>
+ tbody tr:nth-child(odd) td{
+     background: none;
+     background-color: transparent;
+ }
+ td {
+     border: none;
+ }
+ table {
+     border: none;
+ }
+</style>
+
+<table>
+    <tbody>
+    <tr>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-18/images/equip.gif"/></center></td>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-18/images/turf_battle.gif"/></center></td>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-18/images/green_and_orange.gif"/></center></td>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-18/images/map.gif"/></center></td>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-18/images/splash.gif"/></center></td>
+    </tr>
+    <tr>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-18/images/yellow.gif"/></center></td>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-18/images/purple_and_green.gif"/></center></td>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-18/images/finish.gif"/></center></td>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-18/images/winered_and_green.gif"/></center></td>
+	<td><center><img src="{{ site.baseurl }}/assets/2019-04-18/images/judges.gif"/></center></td>
+    </tr>
+    </tbody>
+</table>
+
+Code and model are available [here](https://github.com/hellomoto-ai/splatoon2-ml/releases/tag/vae-gan-v1.1)
+
+{% include github_comment.html issue="2" %}
