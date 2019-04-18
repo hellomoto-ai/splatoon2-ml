@@ -119,14 +119,6 @@ class Discriminator(nn.Module):
         return x, x_feats
 
 
-ModelOutput = collections.namedtuple(
-    'ModelOutput',
-    ['orig', 'latent', 'recon',
-     'feats_orig', 'feats_recon',
-     'preds_orig', 'preds_recon'],
-)
-
-
 class VaeGan(nn.Module):
     def __init__(self, vae, discriminator):
         super().__init__()
@@ -134,31 +126,7 @@ class VaeGan(nn.Module):
         self.discriminator = discriminator
 
     def forward(self, orig):
-        """Run VAE-GAN on the input image
-
-        Parameters
-        ----------
-        orig : torch.Variable
-            Batch contains real images.
-
-        Returns
-        -------
-        ModelOutput
-        """
-        recon, latent = self.vae(orig)
-
-        preds_orig, feats_orig = self.discriminator(orig)
-        preds_recon, feats_recon = self.discriminator(recon)
-
-        return ModelOutput(
-            orig=orig,
-            latent=latent,
-            recon=recon,
-            feats_orig=feats_orig,
-            feats_recon=feats_recon,
-            preds_orig=preds_orig,
-            preds_recon=preds_recon,
-        )
+        raise NotImplementedError('Use `model.vae` or `model.discrinimator`.')
 
 
 def get_model(feat_size=(9, 16), n_latent=1024):
