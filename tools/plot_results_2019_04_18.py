@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python
 from collections import namedtuple
 
@@ -78,6 +79,7 @@ def _plot_gans(base_data, new_data):
     fig = plt.figure()
     ax1 = fig.add_subplot(2, 1, 1)
     _plot_gan(ax1, base_data.train, new_data.train, avg=True)
+    ax1.set(title='Training Loss')
     ax2 = fig.add_subplot(2, 1, 2)
     _plot_gan(ax2, base_data.test, new_data.test)
     ax2.set(xlabel='Steps', ylabel='Log Loss', title='Test Loss')
