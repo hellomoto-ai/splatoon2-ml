@@ -1,0 +1,30 @@
+---
+layout: post
+title:  "VAE-GAN Part 3"
+date:   2019-04-25 00:00:00 +0000
+categories: vae-gan
+mathjax: true
+---
+
+While I was trying another method to improve my VAE-GAN implementation, I encountered OOM, so I <a href="https://github.com/hellomoto-ai/splatoon2-ml/commit/77adb22bed7e164dfc86a3810ae9e00c74c79287">refactored my code around forward/backward computation</a>, following <a href="https://github.com/pytorch/examples/tree/master/dcgan">the PyTorch's DC-GAN implemenation</a>. In this implementation, input batch is fed to the generator, and discriminator separately and loss and gradients are computed each time. Mean while, my implementation was feeding input batch to network and all the loss are computed first then each component of is updated one by one. It turned out that not only this produces gradient for already updated model, but also not as fast in PyTorch.
+
+<!--more-->
+
+Now after the refactoring, the training became even more stable and converged faster while yielding better result. 
+
+<center><img src="{{ site.baseurl }}/assets/2019-04-25/images/pixel.svg"></center>
+
+GAN loss now looks more stable. There is not as much sudden jump as before.
+
+<center><img src="{{ site.baseurl }}/assets/2019-04-25/images/gan.svg"></center>
+
+
+However, KL-divergence is still increasing, though growth is somewhat supressed. Intrguing...
+
+<center><img src="{{ site.baseurl }}/assets/2019-04-25/images/kld.svg"></center>
+
+Feature difference is also suppressed.
+
+<center><img src="{{ site.baseurl }}/assets/2019-04-25/images/feats.svg"></center>
+
+{% include github_comment.html issue="3" %}
