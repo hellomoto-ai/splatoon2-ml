@@ -1,8 +1,6 @@
 import os
 import logging
-import subprocess
 
-import numpy as np
 import torch.utils.data
 
 from sp_vae_gan import image_util
@@ -72,4 +70,4 @@ class VideoDataset(torch.utils.data.Dataset):
 def get_dataloader(flist, data_dir, batch_size, scale, shuffle=True):
     return torch.utils.data.DataLoader(
         Dataset(flist, data_dir, scale=scale),
-        batch_size=batch_size, shuffle=shuffle, num_workers=4)
+        batch_size=batch_size, shuffle=shuffle, num_workers=1)
