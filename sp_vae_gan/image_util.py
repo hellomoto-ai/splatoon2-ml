@@ -2,7 +2,6 @@ import logging
 import subprocess
 
 import cv2
-import imageio
 import numpy as np
 
 _LG = logging.getLogger(__name__)
@@ -16,7 +15,9 @@ def load_image(path, resize=None):
     resize : tuple of int
         (weight, height)
     """
-    img = imageio.imread(path)
+    img = cv2.imread(path, cv2.IMREAD_COLOR)
+    # BGR -> RGB
+    img = img[:, :, ::-1]
     if resize:
         img = cv2.resize(img, resize)
     img = 2 * (img.astype('float') / 255) - 1.0
@@ -29,9 +30,11 @@ def save_image(img, path):
     """Save image to file"""
     # (C, H, W) -> (H, W, C)
     img = img.transpose((1, 2, 0))
+    # RGB -> BGR
+    img = img[:, :, ::-1]
     img = 255 * (img + 1.0) / 2
     img = img.clip(min=0, max=255).astype('uint8')
-    imageio.imwrite(path, img)
+    cv2.imwrite(path, img)
 
 
 # TODO: Turn this into class with context manager
