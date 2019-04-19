@@ -36,8 +36,8 @@ class Trainer:
             self, model, optimizers,
             train_loader, test_loader,
             device, output_dir,
-            gamma=100.0,
-            cap_step=40000, cap_limit=5,
+            gamma=4.0,
+            cap_step=40000, cap_limit=0,
     ):
         self.model = model.float().to(device)
         self.train_loader = train_loader
