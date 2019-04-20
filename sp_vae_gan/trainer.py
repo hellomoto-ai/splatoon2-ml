@@ -48,6 +48,7 @@ class Trainer:
         fields = [
             'PHASE', 'TIME', 'STEP', 'EPOCH', 'KLD', 'CAPACITY', 'F_RECON',
             'G_RECON', 'D_REAL', 'D_RECON', 'PIXEL',
+            'Z_MEAN', 'Z_LOGVAR',
         ]
         logfile = open(os.path.join(output_dir, 'result.csv'), 'w')
         self.writer = misc_utils.CSVWriter(fields, logfile)
@@ -66,6 +67,7 @@ class Trainer:
             F_RECON=loss['feats_recon'],
             G_RECON=loss['gen_recon'], D_REAL=loss['disc_orig'],
             D_RECON=loss['disc_recon'], PIXEL=loss['pixel'],
+            Z_MEAN=loss['z_mean'], Z_LOGVAR=loss['z_logvar'],
         )
 
     def save(self):
@@ -145,8 +147,8 @@ class Trainer:
             self.optimizers['decoder'].step()
 
         # Update latent
-        latent = self.model.vae.encoder(orig)
-        latent_loss = torch.mean(loss_utils.kld_loss(*latent))
+        z_mean, z_logvar = self.model.vae.encoder(orig)
+        latent_loss = torch.mean(loss_utils.kld_loss(z_mean, z_logvar))
         cap = self._get_capacity()
         if update:
             beta_latent_loss = self.gamma * torch.abs(latent_loss - cap)
@@ -158,6 +160,8 @@ class Trainer:
             'capacity': cap,
             'latent': latent_loss.item(),
             'feats_recon': feats_loss.item(),
+            'z_mean': torch.mean(torch.abs(z_mean)).item(),
+            'z_logvar': torch.mean(torch.abs(z_logvar)).item(),
         }
 
     def _get_pixel_loss(self, orig):
