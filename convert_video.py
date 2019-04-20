@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 """Run VAE-GAN model to encode-decode frame by frame"""
+import logging
 import argparse
+import tempfile
+import subprocess
 
 import numpy as np
 import torch
@@ -9,6 +12,8 @@ import torch.utils.data
 import sp_vae_gan.model
 import sp_vae_gan.dataloader
 from sp_vae_gan import image_util
+
+_LG = logging.getLogger(__name__)
 
 
 def _parse_args():
@@ -54,25 +59,39 @@ def _slice(data):
         yield frame.tostring()
 
 
+def _copy_audio(src_audio, video, output):
+    command = [
+        'ffmpeg',
+        '-hide_banner', '-y', '-loglevel', 'panic',
+        '-i', video, '-i', src_audio,
+        '-codec', 'copy', '-map', '0:v:0', '-map', '1:a:0',
+        output
+    ]
+    subprocess.run(command, check=True)
+
+
 def _main():
     args = _parse_args()
-    model = _load_model(args.model)
-    model = model.float()
-    with torch.no_grad():
-        saver = image_util.save_video(args.output, (242, 64), debug=args.debug)
-        generator = _get_loader(args.video, (121, 65), debug=args.debug)
-        for image in generator:
-            image = image.float()
-            z_mean, _ = model.vae.encoder(image)
-            recon = model.vae.decoder(z_mean)
+    _LG.info('Loading model from %s', args.model)
+    model = _load_model(args.model).float()
+    _LG.info('Openinig video %s', args.video)
+    frame_generator = _get_loader(args.video, (121, 65), debug=args.debug)
+    with tempfile.NamedTemporaryFile('wb', suffix='.mp4') as tmp:
+        saver = image_util.VideoSaver(tmp.name, (242, 64), debug=args.debug)
+        with saver, torch.no_grad():
+            for image in frame_generator:
+                image = image.float()
+                z_mean, _ = model.vae.encoder(image)
+                recon = model.vae.decoder(z_mean)
 
-            output = np.concatenate(
-                (image.data.numpy(), recon.data.numpy()), axis=3)
-            output = output[:, :, :64, :]
-            for frame in _slice(output):
-                saver.stdin.write(frame)
-            saver.stdin.flush()
-        saver.stdin.close()
+                output = np.concatenate(
+                    (image.data.numpy(), recon.data.numpy()), axis=3)
+                output = output[:, :, :64, :]
+                for frame in _slice(output):
+                    saver.write(frame)
+                saver.flush()
+        _LG.info('Saving video %s', args.output)
+        _copy_audio(args.video, tmp.name, args.output)
 
 
 if __name__ == '__main__':

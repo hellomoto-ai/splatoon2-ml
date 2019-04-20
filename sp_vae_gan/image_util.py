@@ -37,69 +37,110 @@ def save_image(img, path):
     cv2.imwrite(path, img)
 
 
-# TODO: Turn this into class with context manager
-def load_video(path, scale, frame_rate=30, debug=False):
-    width, height = scale
-    command = [
-        'ffmpeg',
-        '-i', path,
-        '-f', 'rawvideo',
-        '-r', str(frame_rate),
-        '-pix_fmt', 'rgb24',
-        '-vf', 'scale=%d:%d' % (width, height),
-        '-',
-    ]
-    frame_size = 3 * width * height
-    shape = (height, width, 3)
-    process = subprocess.Popen(
-        args=command,
-        stdout=subprocess.PIPE,
-        stderr=None if debug else subprocess.DEVNULL,
-        bufsize=32*frame_size,
-    )
-    n_yield = 0
-    while True:
-        val = process.stdout.read(frame_size)
-        if len(val) != frame_size:
-            break
-        frame = np.frombuffer(val, dtype='uint8')
-        frame = frame.reshape(shape).transpose(2, 0, 1)
-        yield frame
-        n_yield += 1
-    _LG.info('Finished key frame extraction: %d extracted.', n_yield)
-    returncode = process.wait(timeout=0.5)
-    if returncode != 0:
-        _LG.error(
-            'Key frame decoding process (ffmpeg) did not '
-            'complete correctly. Return code: %s', returncode
+def _prod(vals):
+    ret = 1
+    for val in vals:
+        ret *= val
+    return ret
+
+
+class VideoLoader:
+    def __init__(self, path, scale, frame_rate=30, debug=False):
+        self.path = path
+        self.scale = scale
+        self.frame_rate = frame_rate
+        self.debug = debug
+        self.process = None
+
+    def __enter__(self):
+        width, height = self.scale
+        command = [
+            'ffmpeg',
+            '-hide_banner',
+            '-i', self.path,
+            '-f', 'rawvideo',
+            '-r', str(self.frame_rate),
+            '-pix_fmt', 'rgb24',
+            '-vf', 'scale=%d:%d' % (width, height),
+            '-',
+        ]
+        frame_size = 3 * width * height
+        self.process = subprocess.Popen(
+            args=command,
+            stdout=subprocess.PIPE,
+            stderr=None if self.debug else subprocess.DEVNULL,
+            bufsize=32*frame_size,
         )
+        return self
+
+    def __exit__(self, *args):
+        returncode = self.process.wait(timeout=3)
+        if returncode != 0:
+            _LG.error(
+                'Key frame decoding process (ffmpeg) did not '
+                'complete correctly. Return code: %s', returncode
+            )
+        self.process = None
+
+    def __iter__(self):
+        width, height = self.scale
+        shape = (height, width, 3)
+        frame_size = _prod(shape)
+        n_yield = 0
+        while True:
+            val = self.process.stdout.read(frame_size)
+            if len(val) != frame_size:
+                break
+            frame = np.frombuffer(val, dtype='uint8')
+            frame = frame.reshape(shape).transpose(2, 0, 1)
+            yield frame
+            n_yield += 1
+        _LG.info('Finished key frame extraction: %d extracted.', n_yield)
 
 
-# TODO: Turn this into class with context manager
-def save_video(path, scale, frame_rate=30, debug=False):
-    width, height = scale
-    command = [
-        'ffmpeg',
-        '-y',
-        '-f', 'rawvideo',
-        '-vcodec', 'rawvideo',
-        '-framerate', str(frame_rate),
-        '-s', '%dx%d' % (width, height),
-        '-pix_fmt', 'rgb24',
-        '-i', '-',
-        '-an',
-        '-codec:v', 'libx265',
-        '-preset', 'veryslow',
-    ]
-    if width % 2 == 0 and height % 2 == 0:
-        command += ['-pix_fmt', 'yuv420p']
-    command += [path]
-    frame_size = 3 * width * height
-    process = subprocess.Popen(
-        args=command,
-        stdin=subprocess.PIPE,
-        stdout=None if debug else subprocess.DEVNULL,
-        stderr=None if debug else subprocess.DEVNULL,
-        bufsize=frame_size,
-    )
-    return process
+class VideoSaver:
+    def __init__(self, path, scale, frame_rate=30, debug=False):
+        self.path = path
+        self.scale = scale
+        self.frame_rate = frame_rate
+        self.debug = debug
+        self.process = None
+
+    def __enter__(self):
+        width, height = self.scale
+        command = [
+            'ffmpeg',
+            '-hide_banner', '-y',
+            '-f', 'rawvideo',
+            '-vcodec', 'rawvideo',
+            '-framerate', str(self.frame_rate),
+            '-s', '%dx%d' % (width, height),
+            '-pix_fmt', 'rgb24',
+            '-i', '-',
+            '-an',
+            '-codec:v', 'libx264',
+            '-preset', 'veryslow',
+        ]
+        if width % 2 == 0 and height % 2 == 0:
+            command += ['-pix_fmt', 'yuv420p']
+        command += [self.path]
+        _LG.debug(command)
+        frame_size = 3 * width * height
+        self.process = subprocess.Popen(
+            args=command,
+            stdin=subprocess.PIPE,
+            stdout=None if self.debug else subprocess.DEVNULL,
+            stderr=None if self.debug else subprocess.DEVNULL,
+            bufsize=frame_size,
+        )
+        return self
+
+    def __exit__(self, *args):
+        self.process.stdin.close()
+        self.process.wait(3)
+
+    def write(self, frame):
+        self.process.stdin.write(frame)
+
+    def flush(self):
+        self.process.stdin.flush()

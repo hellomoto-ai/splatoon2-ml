@@ -60,11 +60,13 @@ class VideoDataset(torch.utils.data.Dataset):
         self.debug = debug
 
     def __iter__(self):
-        yield from image_util.load_video(
+        loader = image_util.VideoLoader(
             path=self.input_file,
             scale=(self.frame_width, self.frame_height),
             frame_rate=self.frame_rate, debug=self.debug
         )
+        with loader:
+            yield from loader
 
 
 def get_dataloader(flist, data_dir, batch_size, scale, shuffle=True):
