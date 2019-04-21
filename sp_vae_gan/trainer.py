@@ -31,6 +31,29 @@ def _save_images(images, src_path, step, output_dir):
     image_util.save_image(images, save_path)
 
 
+def _fetch_numpy(variable):
+    return variable.cpu().detach().numpy()
+
+
+def _get_latent_stats(z_mean, z_logvar):
+    z_mean = z_mean.detach()
+    z_logvar = z_logvar.detach()
+    # Distance from origin
+    z_mean = torch.norm(z_mean, dim=1).cpu().numpy()
+    # Mean std deviation over latent dimensions
+    z_std = torch.exp(0.5 * z_logvar)
+    z_var = torch.mean(z_std, dim=1).cpu().numpy()
+    # Take average, min, max over batch
+    return {
+        'z_mean': np.mean(z_mean),
+        'z_mean_min': np.min(z_mean),
+        'z_mean_max': np.max(z_mean),
+        'z_var': np.mean(z_var),
+        'z_var_min': np.min(z_var),
+        'z_var_max': np.max(z_var),
+    }
+
+
 class Trainer:
     def __init__(
             self, model, optimizers,
@@ -47,7 +70,8 @@ class Trainer:
         fields = [
             'PHASE', 'TIME', 'STEP', 'EPOCH', 'KLD', 'F_RECON',
             'G_RECON', 'D_REAL', 'D_RECON', 'PIXEL',
-            'Z_MEAN', 'Z_LOGVAR',
+            'Z_MEAN', 'Z_MEAN_MIN', 'Z_MEAN_MAX',
+            'Z_VAR', 'Z_VAR_MIN', 'Z_VAR_MAX',
         ]
         logfile = open(os.path.join(output_dir, 'result.csv'), 'w')
         self.writer = misc_utils.CSVWriter(fields, logfile)
@@ -57,14 +81,16 @@ class Trainer:
 
         self.beta = beta
 
-    def _write(self, phase, loss):
+    def _write(self, phase, loss, stats):
         self.writer.write(
             PHASE=phase, STEP=self.step, EPOCH=self.epoch, TIME=time.time(),
             KLD=loss['latent'],
             F_RECON=loss['feats_recon'],
             G_RECON=loss['gen_recon'], D_REAL=loss['disc_orig'],
             D_RECON=loss['disc_recon'], PIXEL=loss['pixel'],
-            Z_MEAN=loss['z_mean'], Z_LOGVAR=loss['z_logvar'],
+            Z_MEAN=stats['z_mean'], Z_VAR=stats['z_var'],
+            Z_MEAN_MIN=stats['z_mean_min'], Z_VAR_MIN=stats['z_var_min'],
+            Z_MEAN_MAX=stats['z_mean_max'], Z_VAR_MAX=stats['z_var_max'],
         )
 
     def save(self):
@@ -148,12 +174,12 @@ class Trainer:
             beta_latent_loss.backward()
             self.optimizers['encoder'].step()
 
-        return recon, {
+        loss = {
             'latent': latent_loss.item(),
             'feats_recon': feats_loss.item(),
-            'z_mean': torch.mean(torch.abs(z_mean)).item(),
-            'z_logvar': torch.mean(torch.abs(z_logvar)).item(),
         }
+        stats = _get_latent_stats(z_mean, z_logvar)
+        return recon, loss, stats
 
     def _get_pixel_loss(self, orig):
         recon, _ = self.model.vae(orig)
@@ -161,23 +187,23 @@ class Trainer:
 
     def _forward(self, orig, update=False):
         loss_gan = self._forward_gan(orig, update=update)
-        recon, loss_vae = self._forward_vae(orig, update=update)
+        recon, loss_vae, stats = self._forward_vae(orig, update=update)
         with torch.no_grad():
             pixel_loss = self._get_pixel_loss(orig)
 
         loss = {'pixel': pixel_loss.item()}
         loss.update(loss_vae)
         loss.update(loss_gan)
-        return recon, loss
+        return recon, loss, stats
 
     def train(self):
         self.model.train()
         _LG.info('         %s', loss_utils.format_loss_header())
         for i, batch in enumerate(self.train_loader):
             orig = batch['image'].float().to(self.device)
-            _, loss = self._forward(orig, update=True)
+            _, loss, stats = self._forward(orig, update=True)
             self.step += 1
-            self._write('train', loss)
+            self._write('train', loss, stats)
             if i % 30 == 0:
                 progress = 100. * i / len(self.train_loader)
                 _LG.info(
@@ -191,18 +217,20 @@ class Trainer:
 
     def _test(self):
         self.model.eval()
-        accum = misc_utils.MeanTracker()
+        loss_tracker = misc_utils.StatsTracker()
+        stats_tracker = misc_utils.StatsTracker()
         for i, batch in enumerate(self.test_loader):
             orig, path = batch['image'].float().to(self.device), batch['path']
-            recon, loss = self._forward(orig, update=False)
-            accum.update(loss)
-
+            recon, loss, stats = self._forward(orig, update=False)
+            loss_tracker.update(loss)
+            stats_tracker.update(stats)
             if i % 10 == 0:
                 _save_images(
                     (orig[0], recon[0]), path[0],
                     self.step, self.output_dir)
-        self._write('test', accum)
-        _LG.info('         %s', loss_utils.format_loss_dict(accum))
+
+        self._write('test', loss_tracker, stats)
+        _LG.info('         %s', loss_utils.format_loss_dict(loss_tracker))
 
     def __repr__(self):
         opt = '\n'.join([

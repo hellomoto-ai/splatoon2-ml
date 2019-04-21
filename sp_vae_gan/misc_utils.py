@@ -1,8 +1,10 @@
 import csv
 import collections
 
+import numpy as np
 
-class MeanTracker(collections.defaultdict):
+
+class StatsTracker(collections.defaultdict):
     """Keep track of mean values"""
     def __init__(self):
         super().__init__(float)
@@ -10,7 +12,15 @@ class MeanTracker(collections.defaultdict):
 
     def update(self, data):
         for key, val in data.items():
-            self[key] += (val - self[key]) / self.step
+            if key.endswith('_min'):
+                val = np.min(val)
+                self[key] = min(self.get(key, val), val)
+            elif key.endswith('_max'):
+                val = np.max(val)
+                self[key] = max(self.get(key, val), val)
+            else:
+                val = np.mean(val)
+                self[key] += (val - self[key]) / self.step
         self.step += 1
 
 
