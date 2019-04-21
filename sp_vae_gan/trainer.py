@@ -36,7 +36,7 @@ class Trainer:
             self, model, optimizers,
             train_loader, test_loader,
             device, output_dir,
-            beta=8.0,
+            beta=2.0,
     ):
         self.model = model.float().to(device)
         self.train_loader = train_loader
