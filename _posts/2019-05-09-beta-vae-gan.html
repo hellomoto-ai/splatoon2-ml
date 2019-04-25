@@ -1,0 +1,74 @@
+---
+layout: post
+title:  "βVAE-GAN?"
+date:   2019-05-09 00:00:00 +0000
+categories: vae-gan
+mathjax: true
+---
+
+<p>
+    Looking at <a href="{{ site.baseurl }}/vae-gan/2019/05/01/frame-by-frame-reconstruction/">Frame by Frame Reconstruction</a>, and reading through papers on VAE/GAN, I noticed that the quality of my reconstructions are terrible. Also the fact that KL-divergence term is not converging was still bothering. So I added β multiplier to KL-divergence term and observed how it affects the behavior of latent samples. The previously trained model was $\beta=1$, so I changed β to 0.1, 2.0, 4.0, 8.0.
+</p>
+
+<p>
+    Let's see how KL divergence and pixel error change.
+</p>
+
+<center><img src="{{ site.baseurl }}/assets/2019-05-09/images/kld.svg"></center>
+<!--more-->
+<center><img src="{{ site.baseurl }}/assets/2019-05-09/images/pixel.svg"></center>
+
+<p>
+    It's giving a mixed signal to me. Before running this experiments, I was expecting that increased pressure on KL divergence would prevent the KL divergence from growing. (It is still possible that the trainig period is too short so that it has not reached convergece point.) However, it looks like, no matter how big KL divergence, GAN (descriminator) part of the model will eventually find the way to amplify the key difference and optimizing the feature matching term encourages the encoder to generate samples more different from normal distribution in latent space. 
+</p>
+
+<p>
+    To see which term of KL divergence is causing the deviation, I recorded the distance of encoded samples from origin in the latent space.
+</p>
+
+<center><img src="{{ site.baseurl }}/assets/2019-05-09/images/latent.svg"></center>
+
+<p>
+    What was surprising for me was that the whole sample distribution is drifting away from the origin. Before this plot, I was expecting that the samples are distributed around the origin, densely, so that some points are close to the origin but some points are very far. Instead it is either distributed like a ring, or one dense group sitting far from origin, like a galaxy. This also explains why fake images generated from random samples sampled from normal distribution in latent space do not resemble real image at all.
+</p>
+
+
+<p>
+    This VAE-GAN model, which I believed so, is neither VAE or GAN. Now the question is, how can I fix this?
+</p>
+
+
+<p>
+    Couple of thoughts;
+</p>
+
+<ul>
+    <li>Instead of relying on feature matching error, optimize pixel error with BCE.</li>
+    <li>Use non-linear activation in feature extraction part of descriminator.</li>
+    <li>Use WGAN-GP, of which error corresponds to image quality error.</li>
+    <li>Re-start from VAE / β-VAE.</li>
+</ul>
+
+
+<h2> References</h2>
+
+<ol>
+    <li><a href="https://www.reddit.com/r/MachineLearning/comments/bg0c9z/d_unifying_vaes_and_gans/">Reddit: Unifying VAEs and GANs</a><br>
+	It is not about VAE-GAN, but the discussion provides a good theoritical views.
+    </li>
+    <li><a href="https://www.inference.vc/an-alternative-update-rule-for-generative-adversarial-networks/">Ferenc: An Alternative Update Rule for Generative Adversarial Networks</a><br>
+	Linked from the above thread, how to make GAN optimize KL divergence instead of JS divergence.
+    </li>
+    <li><a href="https://www.reddit.com/r/MachineLearning/comments/al0lvl/d_variational_autoencoders_are_not_autoencoders/">Reddit: VAEs are not Autoencoders</a> and <a href="http://paulrubenstein.co.uk/variational-autoencoders-are-not-autoencoders/">it's linked post by Paul Rubenstein</a><br>
+	This post and discussion helped me see the relationship of latent sample and generated data distribution.
+    </li>
+    <li><a href="https://www.reddit.com/r/MachineLearning/comments/7fkdtm/d_how_does_posterior_collapse_in_vaes_happen/">How does posterior collapse in VAEs happen?</a><br>
+	This discussion taught me the aspect of pwerful/flexible decoder and posterior collapse.
+    </li>
+    <li>
+	<a href="https://github.com/shayneobrien/generative-models/blob/master/notebooks/09-variational-autoencoder.ipynb">VAE Loss Plot by shayneobrien</a><br>
+	In vanilla VAE, KL divergence converges nicely.
+    </li>
+</ol>
+
+{% include github_comment.html issue="5" %}
