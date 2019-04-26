@@ -23,7 +23,6 @@ Check out the detail from [here](https://hellomoto-ai.github.io/splatoon2-ml/).
 ### Dependencies
 - torch
 - cv2
-- imageio
 - numpy
 
 ### Dataset

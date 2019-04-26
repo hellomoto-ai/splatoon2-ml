@@ -16,6 +16,8 @@ def load_image(path, resize=None):
         (weight, height)
     """
     img = cv2.imread(path, cv2.IMREAD_COLOR)
+    if img is None:
+        raise RuntimeError('Failed to load image; %s' % path)
     # BGR -> RGB
     img = img[:, :, ::-1]
     if resize:
