@@ -61,7 +61,7 @@ class Trainer:
 
         fields = [
             'PHASE', 'TIME', 'STEP', 'EPOCH', 'KLD', 'F_RECON',
-            'G_RECON', 'D_REAL', 'D_RECON', 'PIXEL',
+            'G_RECON', 'G_FAKE', 'D_REAL', 'D_RECON', 'D_FAKE', 'PIXEL',
             'Z_DIST_MEAN', 'Z_DIST_MIN', 'Z_DIST_MAX', 'Z_DIST_VAR',
         ]
         logfile = open(os.path.join(output_dir, 'result.csv'), 'w')
@@ -75,8 +75,10 @@ class Trainer:
             PHASE=phase, STEP=self.step, EPOCH=self.epoch, TIME=time.time(),
             KLD=loss['latent'],
             F_RECON=loss['feats_recon'],
-            G_RECON=loss['gen_recon'], D_REAL=loss['disc_orig'],
-            D_RECON=loss['disc_recon'], PIXEL=loss['pixel'],
+            G_RECON=loss['gen_recon'], G_FAKE=loss['gen_fake'],
+            D_REAL=loss['disc_orig'],
+            D_RECON=loss['disc_recon'], D_FAKE=loss['disc_recon'],
+            PIXEL=loss['pixel'],
             Z_DIST_MEAN=stats['z_dist_mean'], Z_DIST_VAR=stats['z_dist_var'],
             Z_DIST_MIN=stats['z_dist_min'], Z_DIST_MAX=stats['z_dist_max'],
         )
@@ -107,7 +109,7 @@ class Trainer:
         self.step = data['step']
 
     def _forward_gan(self, orig, update=False):
-        # 1. Update discriminator with original (real) image
+        # Update discriminator with original image
         preds_orig, _ = self.model.discriminator(orig)
         disc_loss_orig = loss_utils.bce(preds_orig, 1)
         if update:
@@ -115,8 +117,8 @@ class Trainer:
             disc_loss_orig.backward()
             self.optimizers['discriminator'].step()
 
-        # 2. Update discriminator with reconstructed (fake) image
-        recon, _ = self.model.ae(orig)
+        # Update discriminator with reconstructed image
+        recon, latent = self.model.ae(orig)
         preds_recon, _ = self.model.discriminator(recon.detach())
         disc_loss_recon = loss_utils.bce(preds_recon, 0)
         if update:
@@ -124,18 +126,38 @@ class Trainer:
             disc_loss_recon.backward()
             self.optimizers['discriminator'].step()
 
-        # 3. Update generator
+        # Update generator with reconstructed image
         preds_recon, _ = self.model.discriminator(recon)
-        gen_loss = loss_utils.bce(preds_recon, 1)
+        gen_loss_recon = loss_utils.bce(preds_recon, 1)
         if update:
             self.model.zero_grad()
-            gen_loss.backward()
+            gen_loss_recon.backward()
+            self.optimizers['decoder'].step()
+
+        # Update discriminator with fake image
+        sample = torch.randn_like(latent, requires_grad=True)
+        fake = self.model.ae.decoder(sample)
+        preds_fake, _ = self.model.discriminator(fake.detach())
+        disc_loss_fake = loss_utils.bce(preds_fake, 0)
+        if update:
+            self.model.zero_grad()
+            disc_loss_fake.backward()
+            self.optimizers['discriminator'].step()
+
+        # Update generator with fake image
+        preds_fake, _ = self.model.discriminator(fake)
+        gen_loss_fake = loss_utils.bce(preds_fake, 1)
+        if update:
+            self.model.zero_grad()
+            gen_loss_fake.backward()
             self.optimizers['decoder'].step()
 
         return {
             'disc_orig': disc_loss_orig.item(),
             'disc_recon': disc_loss_recon.item(),
-            'gen_recon': gen_loss.item(),
+            'disc_fake': disc_loss_fake.item(),
+            'gen_recon': gen_loss_recon.item(),
+            'gen_fake': gen_loss_fake.item(),
         }
 
     def _forward_ae(self, orig, update=False):

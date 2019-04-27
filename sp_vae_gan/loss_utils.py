@@ -3,16 +3,17 @@ import torch.nn.functional as F
 
 
 def format_loss_header():
-    return ' '.join(['%10s'] * 6) % (
+    return ' '.join(['%10s'] * 8) % (
         'KLD', 'F_RECON',
-        'G_RECON', 'D_REAL', 'D_RECON', '[PIXEL]',
+        'G_RECON', 'G_FAKE', 'D_REAL', 'D_RECON', 'D_FAKE', '[PIXEL]',
     )
 
 
 def format_loss_dict(loss):
-    return ' '.join(['%10.2e'] * 6) % (
+    return ' '.join(['%10.2e'] * 8) % (
         loss['latent'], loss['feats_recon'],
-        loss['gen_recon'], loss['disc_orig'], loss['disc_recon'],
+        loss['gen_recon'], loss['gen_fake'],
+        loss['disc_orig'], loss['disc_recon'], loss['disc_fake'],
         loss['pixel'],
     )
 
