@@ -98,14 +98,15 @@ def _run_main(args):
     trainer = _get_trainer(args)
     _LG.info('\n%s', trainer)
     _LG.info('Batch size: %s', args.batch_size)
+    _LG.info('Epoch: %d - Test', trainer.epoch)
+    trainer.test()
     for _ in range(args.epoch):
-        _LG.info('Epoch: %d', trainer.epoch)
-        _LG.info('Training ...')
+        _LG.info('Epoch: %d - Training', trainer.epoch)
         try:
             trainer.train()
         finally:
             trainer.save()
-        _LG.info('Testing...')
+        _LG.info('Epoch: %d - Test', trainer.epoch)
         trainer.test()
 
 
