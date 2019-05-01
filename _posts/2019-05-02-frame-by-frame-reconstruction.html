@@ -26,7 +26,7 @@ mathjax: true
 I ran the current VAE-GAN model over some battle scenes to see what they look like.
 
 <div class="video-container">
-<video id='video-0'  class="video-js vjs-default-skin" width="484" height="300" controls muted
+<video id='video-0'  class="video-js vjs-default-skin" width="484" height="300" controls
        poster="{{ site.baseurl }}/assets/2019-05-02/4416_407520599_recon/poster.jpg">>
     <source type="application/x-mpegURL"
 		  src="{{ site.baseurl }}/assets/2019-05-02/4416_407520599_recon/playlist.m3u8">
@@ -34,41 +34,44 @@ I ran the current VAE-GAN model over some battle scenes to see what they look li
 </div>
 <br>
 <script>
- videojs('video-0');
+ function initVideo(tag) {
+     videojs(tag).ready(function(){var p = this; p.volume(0.1); p.muted(true);});
+ };
+ initVideo('video-0')
 </script>
 <!--more-->
 <div class="video-container">
-<video id='video-1'  class="video-js vjs-default-skin" width="484" height="300" controls muted
+<video id='video-1'  class="video-js vjs-default-skin" width="484" height="300" controls
        poster="{{ site.baseurl }}/assets/2019-05-02/4416_409887854-2_recon/poster.jpg">
     <source type="application/x-mpegURL"
 		  src="{{ site.baseurl }}/assets/2019-05-02/4416_409887854-2_recon/playlist.m3u8">
 </video>
 <br>
-<video id='video-2'  class="video-js vjs-default-skin" width="484" height="300" controls muted
+<video id='video-2'  class="video-js vjs-default-skin" width="484" height="300" controls
        poster="{{ site.baseurl }}/assets/2019-05-02/4416_409887854-1_recon/poster.jpg">
     <source type="application/x-mpegURL"
 		  src="{{ site.baseurl }}/assets/2019-05-02/4416_409887854-1_recon/playlist.m3u8">
 </video>
 <br>
-<video id='video-3'  class="video-js vjs-default-skin" width="484" height="300" controls muted
+<video id='video-3'  class="video-js vjs-default-skin" width="484" height="300" controls
        poster="{{ site.baseurl }}/assets/2019-05-02/4416_408017955-1_recon/poster.jpg">
     <source type="application/x-mpegURL"
 		  src="{{ site.baseurl }}/assets/2019-05-02/4416_408017955-1_recon/playlist.m3u8">
 </video>
 <br>
-<video id='video-4'  class="video-js vjs-default-skin" width="484" height="300" controls muted
+<video id='video-4'  class="video-js vjs-default-skin" width="484" height="300" controls
        poster="{{ site.baseurl }}/assets/2019-05-02/4416_409887854-3_recon/poster.jpg">
     <source type="application/x-mpegURL"
 		  src="{{ site.baseurl }}/assets/2019-05-02/4416_409887854-3_recon/playlist.m3u8">
 </video>
 <br>
-<video id='video-5'  class="video-js vjs-default-skin" width="484" height="300" controls muted
+<video id='video-5'  class="video-js vjs-default-skin" width="484" height="300" controls
        poster="{{ site.baseurl }}/assets/2019-05-02/4416_409887854-5_recon/poster.jpg">
     <source type="application/x-mpegURL"
 		  src="{{ site.baseurl }}/assets/2019-05-02/4416_409887854-5_recon/playlist.m3u8">
 </video>
 <br>
-<video id='video-6'  class="video-js vjs-default-skin" width="484" height="300" controls muted
+<video id='video-6'  class="video-js vjs-default-skin" width="484" height="300" controls
        poster="{{ site.baseurl }}/assets/2019-05-02/4416_409887854-4_recon/poster.jpg">
     <source type="application/x-mpegURL"
 		  src="{{ site.baseurl }}/assets/2019-05-02/4416_409887854-4_recon/playlist.m3u8">
@@ -76,12 +79,7 @@ I ran the current VAE-GAN model over some battle scenes to see what they look li
 </div>
 
 <script>
- videojs('video-1');
- videojs('video-2');
- videojs('video-3');
- videojs('video-4');
- videojs('video-5');
- videojs('video-6');
+ for (let id = 1; id < 7; id++) {initVideo('video-' + id.toString());}
 </script>
 
 {% include github_comment.html issue="4" %}
