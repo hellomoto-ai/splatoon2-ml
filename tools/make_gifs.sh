@@ -8,7 +8,10 @@ if [ $# -ne 1 ]; then
 fi
 
 base_dir="$1"
+
+this_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+script="${this_dir}/make_gifs.py"
 while read dir; do
     echo "Processing ${dir}"
-    ./make_gifs.py -i "${dir}" -o "${dir}.gif"
+    "${script}" -i "${dir}" -o "${dir}.gif"
 done < <(find "${base_dir}" ! -path "${base_dir}" -type d)
