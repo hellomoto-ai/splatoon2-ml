@@ -35,22 +35,14 @@ def _fetch_numpy(variable):
     return variable.cpu().detach().numpy()
 
 
-def _get_latent_stats(z_mean, z_logvar):
-    z_mean = z_mean.detach()
-    z_logvar = z_logvar.detach()
+def _get_latent_stats(z):
     # Distance from origin
-    z_mean = torch.norm(z_mean, dim=1).cpu().numpy()
-    # Mean std deviation over latent dimensions
-    z_std = torch.exp(0.5 * z_logvar)
-    z_var = torch.mean(z_std, dim=1).cpu().numpy()
-    # Take average, min, max over batch
+    z_dist = torch.norm(z.detach(), dim=1).cpu().numpy()
     return {
-        'z_mean': np.mean(z_mean),
-        'z_mean_min': np.min(z_mean),
-        'z_mean_max': np.max(z_mean),
-        'z_var': np.mean(z_var),
-        'z_var_min': np.min(z_var),
-        'z_var_max': np.max(z_var),
+        'z_dist_mean': np.mean(z_dist),
+        'z_dist_min': np.min(z_dist),
+        'z_dist_max': np.max(z_dist),
+        'z_dist_var': np.var(z_dist),
     }
 
 
@@ -67,19 +59,18 @@ class Trainer:
         self.optimizers = optimizers
         self.device = device
         self.output_dir = output_dir
+        self.beta = beta
+
         fields = [
             'PHASE', 'TIME', 'STEP', 'EPOCH', 'KLD', 'F_RECON',
             'G_RECON', 'D_REAL', 'D_RECON', 'PIXEL',
-            'Z_MEAN', 'Z_MEAN_MIN', 'Z_MEAN_MAX',
-            'Z_VAR', 'Z_VAR_MIN', 'Z_VAR_MAX',
+            'Z_DIST_MEAN', 'Z_DIST_MIN', 'Z_DIST_MAX', 'Z_DIST_VAR',
         ]
         logfile = open(os.path.join(output_dir, 'result.csv'), 'w')
         self.writer = misc_utils.CSVWriter(fields, logfile)
 
         self.step = 0
         self.epoch = 0
-
-        self.beta = beta
 
     def _write(self, phase, loss, stats):
         self.writer.write(
@@ -88,9 +79,8 @@ class Trainer:
             F_RECON=loss['feats_recon'],
             G_RECON=loss['gen_recon'], D_REAL=loss['disc_orig'],
             D_RECON=loss['disc_recon'], PIXEL=loss['pixel'],
-            Z_MEAN=stats['z_mean'], Z_VAR=stats['z_var'],
-            Z_MEAN_MIN=stats['z_mean_min'], Z_VAR_MIN=stats['z_var_min'],
-            Z_MEAN_MAX=stats['z_mean_max'], Z_VAR_MAX=stats['z_var_max'],
+            Z_DIST_MEAN=stats['z_dist_mean'], Z_DIST_VAR=stats['z_dist_var'],
+            Z_DIST_MIN=stats['z_dist_min'], Z_DIST_MAX=stats['z_dist_max'],
         )
 
     def save(self):
@@ -119,9 +109,6 @@ class Trainer:
         self.step = data['step']
 
     def _forward_gan(self, orig, update=False):
-        # TODO: Try loss-based balancing:
-        # http://torch.ch/blog/2015/11/13/gan.html
-
         # 1. Update discriminator with original (real) image
         preds_orig, _ = self.model.discriminator(orig)
         disc_loss_orig = loss_utils.bce(preds_orig, 1)
@@ -131,7 +118,7 @@ class Trainer:
             self.optimizers['discriminator'].step()
 
         # 2. Update discriminator with reconstructed (fake) image
-        recon, _ = self.model.vae(orig)
+        recon, _ = self.model.ae(orig)
         preds_recon, _ = self.model.discriminator(recon.detach())
         disc_loss_recon = loss_utils.bce(preds_recon, 0)
         if update:
@@ -153,9 +140,9 @@ class Trainer:
             'gen_recon': gen_loss.item(),
         }
 
-    def _forward_vae(self, orig, update=False):
+    def _forward_ae(self, orig, update=False):
         # Update feature
-        recon, _ = self.model.vae(orig)
+        recon, z = self.model.ae(orig)
         _, feats_orig = self.model.discriminator(orig)
         _, feats_recon = self.model.discriminator(recon)
         feats_loss = F.mse_loss(input=feats_recon, target=feats_orig)
@@ -165,34 +152,36 @@ class Trainer:
             self.optimizers['encoder'].step()
             self.optimizers['decoder'].step()
 
-        # Update latent
-        z_mean, z_logvar = self.model.vae.encoder(orig)
-        latent_loss = torch.mean(loss_utils.kld_loss(z_mean, z_logvar))
+        # Compute KLD
+        with torch.no_grad():
+            latent_loss = loss_utils.kld_loss(z).mean()
+        '''
         if update:
             beta_latent_loss = self.beta * latent_loss
             self.model.zero_grad()
             beta_latent_loss.backward()
             self.optimizers['encoder'].step()
+        '''
 
         loss = {
             'latent': latent_loss.item(),
             'feats_recon': feats_loss.item(),
         }
-        stats = _get_latent_stats(z_mean, z_logvar)
+        stats = _get_latent_stats(z)
         return recon, loss, stats
 
     def _get_pixel_loss(self, orig):
-        recon, _ = self.model.vae(orig)
+        recon, _ = self.model.ae(orig)
         return F.mse_loss(orig, recon)
 
     def _forward(self, orig, update=False):
         loss_gan = self._forward_gan(orig, update=update)
-        recon, loss_vae, stats = self._forward_vae(orig, update=update)
+        recon, loss_ae, stats = self._forward_ae(orig, update=update)
         with torch.no_grad():
             pixel_loss = self._get_pixel_loss(orig)
 
         loss = {'pixel': pixel_loss.item()}
-        loss.update(loss_vae)
+        loss.update(loss_ae)
         loss.update(loss_gan)
         return recon, loss, stats
 
@@ -228,7 +217,6 @@ class Trainer:
                 _save_images(
                     (orig[0], recon[0]), path[0],
                     self.step, self.output_dir)
-
         self._write('test', loss_tracker, stats)
         _LG.info('         %s', loss_utils.format_loss_dict(loss_tracker))
 

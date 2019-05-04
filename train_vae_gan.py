@@ -82,8 +82,8 @@ def _get_trainer(args):
     model = sp_vae_gan.model.get_model()
     opt = torch.optim.Adam
     optimizers = {
-        'encoder': opt(model.vae.encoder.parameters(), lr=args.lr),
-        'decoder': opt(model.vae.decoder.parameters(), lr=args.lr),
+        'encoder': opt(model.ae.encoder.parameters(), lr=args.lr),
+        'decoder': opt(model.ae.decoder.parameters(), lr=args.lr),
         'discriminator': opt(model.discriminator.parameters(), lr=args.lr),
     }
     trainer = sp_vae_gan.trainer.Trainer(

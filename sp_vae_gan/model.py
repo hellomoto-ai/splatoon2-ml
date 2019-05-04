@@ -4,27 +4,25 @@ import torch.nn.functional as F
 
 
 class EncoderBlock(nn.Sequential):
-    """Based on https://github.com/lucabergamini/VAEGAN-PYTORCH.git"""
     def __init__(self, in_channels, out_channels):
         super().__init__(
             nn.ReflectionPad2d(2),
             nn.Conv2d(
                 in_channels=in_channels, out_channels=out_channels,
                 kernel_size=5, stride=2, bias=False),
-            nn.InstanceNorm2d(num_features=out_channels, momentum=0.9),
+            nn.BatchNorm2d(num_features=out_channels),
             nn.ReLU(),
         )
 
 
 class DecoderBlock(nn.Sequential):
-    """Based on https://github.com/lucabergamini/VAEGAN-PYTORCH.git"""
     def __init__(self, in_channels, out_channels):
         super().__init__(
             nn.ConvTranspose2d(
                 in_channels=in_channels, out_channels=out_channels,
                 kernel_size=5, padding=2, stride=2, bias=False),
-            nn.InstanceNorm2d(out_channels, momentum=0.9),
-            nn.ReLU(),
+            nn.InstanceNorm2d(out_channels),
+            nn.LeakyReLU(),
         )
 
 
@@ -38,14 +36,15 @@ class Encoder(nn.Module):
             *[EncoderBlock(*channels[i:i+2]) for i in range(len(channels)-1)]
         )
         n_features = feat_size[0] * feat_size[1] * channels[-1]
-        self.map = nn.Linear(n_features, 2 * num_latent)
+        self.map = nn.Sequential(
+            nn.Linear(n_features, num_latent, bias=False),
+            nn.BatchNorm1d(num_features=num_latent),
+        )
 
     def forward(self, x):
         x = self.convs(x)
-        x = x.view(x.size()[0], -1)
-        z = self.map(x)
-        z_mean, z_logvar = z[:, :self.num_latent], z[:, self.num_latent:]
-        return z_mean, z_logvar
+        z = self.map(x.view(x.size()[0], -1))
+        return z
 
 
 class Decoder(nn.Module):
@@ -74,17 +73,16 @@ class Decoder(nn.Module):
         return torch.tanh(self.convs(x))
 
 
-class VAE(nn.Module):
+class AE(nn.Module):
     def __init__(self, encoder, decoder):
         super().__init__()
         self.encoder = encoder
         self.decoder = decoder
 
     def forward(self, orig):
-        z_mean, z_logvar = self.encoder(orig)
-        z_std = torch.exp(0.5 * z_logvar)
-        recon = self.decoder(z_mean + z_std * torch.randn_like(z_std))
-        return recon, (z_mean, z_logvar)
+        z = self.encoder(orig)
+        recon = self.decoder(z)
+        return recon, z
 
 
 class Discriminator(nn.Module):
@@ -117,20 +115,19 @@ class Discriminator(nn.Module):
         return x, x_feats
 
 
-class VaeGan(nn.Module):
-    def __init__(self, vae, discriminator):
+class AeGan(nn.Module):
+    def __init__(self, ae, discriminator):
         super().__init__()
-        self.vae = vae
+        self.ae = ae
         self.discriminator = discriminator
 
     def forward(self, orig):
-        raise NotImplementedError('Use `model.vae` or `model.discrinimator`.')
+        raise NotImplementedError('Use `model.ae` or `model.discrinimator`.')
 
 
 def get_model(feat_size=(9, 16), n_latent=1024):
     encoder = Encoder(feat_size, n_latent)
     decoder = Decoder(feat_size, n_latent)
     discriminator = Discriminator(feat_size)
-    vae = VAE(encoder, decoder)
-    vae_gan = VaeGan(vae, discriminator)
-    return vae_gan
+    model = AeGan(AE(encoder, decoder), discriminator)
+    return model
