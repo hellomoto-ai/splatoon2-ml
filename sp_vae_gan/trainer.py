@@ -51,7 +51,6 @@ class Trainer:
             self, model, optimizers,
             train_loader, test_loader,
             device, output_dir,
-            beta=1,
     ):
         self.model = model.float().to(device)
         self.train_loader = train_loader
@@ -59,7 +58,6 @@ class Trainer:
         self.optimizers = optimizers
         self.device = device
         self.output_dir = output_dir
-        self.beta = beta
 
         fields = [
             'PHASE', 'TIME', 'STEP', 'EPOCH', 'KLD', 'F_RECON',
@@ -158,9 +156,8 @@ class Trainer:
                 z.mean(dim=0), z.var(dim=0)).mean()
         '''
         if update:
-            beta_latent_loss = self.beta * latent_loss
             self.model.zero_grad()
-            beta_latent_loss.backward()
+            latent_loss.backward()
             self.optimizers['encoder'].step()
         '''
 
@@ -225,6 +222,6 @@ class Trainer:
         opt = '\n'.join([
             '%s: %s' % (key, val) for key, val in self.optimizers.items()
         ])
-        return 'Epoch: %d\nStep: %d\nModel: %s\nOptimizers: %s\nBeta: %s\n' % (
-            self.epoch, self.step, self.model, opt, self.beta
+        return 'Epoch: %d\nStep: %d\nModel: %s\nOptimizers: %s\n' % (
+            self.epoch, self.step, self.model, opt
         )
