@@ -154,7 +154,8 @@ class Trainer:
 
         # Compute KLD
         with torch.no_grad():
-            latent_loss = loss_utils.kld_loss(z).mean()
+            latent_loss = loss_utils.kld_loss(
+                z.mean(dim=0), z.var(dim=0)).mean()
         '''
         if update:
             beta_latent_loss = self.beta * latent_loss
