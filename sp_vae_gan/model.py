@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class EncoderBlock(nn.Sequential):
@@ -92,24 +91,32 @@ class Discriminator(nn.Module):
         self.convs = nn.Sequential(
             nn.ReflectionPad2d(2),
             nn.Conv2d(3, 32, kernel_size=5),
+            nn.LeakyReLU(),
+            #################
             nn.ReflectionPad2d(2),
             nn.Conv2d(32, 128, kernel_size=5, stride=2),
+            nn.LeakyReLU(),
+            #################
             nn.ReflectionPad2d(2),
             nn.Conv2d(128, 256, kernel_size=5, stride=2),
+            nn.LeakyReLU(),
+            #################
             nn.ReflectionPad2d(2),
             nn.Conv2d(256, 256, kernel_size=5, stride=2),
+            nn.LeakyReLU(),
+            #################
         )
         n_feat = self.feat_size[0] * self.feat_size[1] * 256
         self.fc = nn.Sequential(
             nn.Linear(in_features=n_feat, out_features=512),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(),
             nn.Linear(in_features=512, out_features=1),
             nn.Sigmoid()
         )
 
     def forward(self, x):
-        x_feats = self.convs(x)
-        x = F.relu(x_feats)
+        x = self.convs(x)
+        x_feats = x
         x = x.view(len(x), -1)
         x = self.fc(x)
         return x, x_feats
