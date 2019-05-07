@@ -1,0 +1,77 @@
+---
+layout: post
+title:  "VAE-GAN Part4: AE-GAN with BN Cheating"
+date:   2019-05-16 00:00:00 +0000
+categories: vae-gan
+mathjax: true
+---
+
+
+<center>
+    <figure>
+	<img src="{{ site.baseurl }}/assets/2019-05-16/samples.gif">
+	<figcaption>Timelaps of fake images generated from same random samples. Many samples collapse after a while. </figcaption>
+    </figure>
+</center>
+
+<!--more-->
+
+<p>
+    In <a href="{{ site.baseurl }}/vae-gan/2019/05/08/beta-vae-gan/">the previous post</a>, I realized that my what I thought VAE-GAN was not VAE-GAN, and that all the strange phenomena were caused by latent samples not taking a form of normal distribution (exploding KL divergence).
+</p>
+
+<p>
+    After couple of trials and code review, I realized that encoder part is optimized to reduce two objective function, KL-Divergence and feature matching error. Assuming that KL-Divergence implementation is correct, the only explanatin for exploding KL-Divergence was this feature matching optimization. I tweaked the optimization process so that when optimizing feature matching error, only the decoder parameters are updated. Training models couple of time, KL-Divergence wass no longer exploding, but now the reconstruction error after the same amount of training as before was not as good. In fact, GAN part was not contributing to the training anymore as discriminator converges to zero very quickly.
+</p>
+
+<p>
+    I tried the following things, but after all, I could not successfully train VAE-GAN while keeping KL-Divergence small.
+</p>
+
+<ul>
+    <li>Optimizing reconstruction error in place of / alongside feature matching error.</li>
+    <li>Use BCE error for reconstruction error instead of MSE.</li>
+    <li>Try balancing descriminator/generator update based on loss.</li>
+    <li>Use LeakyReLU in generator (decoder) and discriminator, as described in <a href="https://github.com/soumith/ganhacks">GAN Hacks</a>.</li>
+    <li>Use SNGAN (Spectral Normalization and hinge loss). Need to revisit this.</li>
+</ul>
+
+<p>
+    At some point, I realized that for the GAN part of the model to work as GAN, the input samples must follow normal distribution, and KL-Divergence as seen as regularization term is not powerful enough, so I tried using Batch Normalization as the last layer of encoder part. This way, the distribution of the encoded samples become closer to normal distribution. Looking back the past few weeks where I tried so many different technique to regularize KLD, the adoptation of Batch Normalization like this felt like cheating, so I personally decided to call this technique Batch Normalization Cheating.
+</p>
+
+<center><img src="{{ site.baseurl }}/assets/2019-05-16/pixel.svg"></center>
+
+<p>
+    With this technique, the pixel error has reduced passed 0.1, which is a kind of milestone.
+</p>
+
+<center><img src="{{ site.baseurl }}/assets/2019-05-16/kld.svg"></center>
+
+<p>
+    KL-Divergence of each batch. It of course is bounded.
+</p>
+
+<center><img src="{{ site.baseurl }}/assets/2019-05-16/gan.svg"></center>
+
+
+<center><img src="{{ site.baseurl }}/assets/2019-05-16/feats.svg"></center>
+
+<p>
+    The following is some fake images generated from random samples before generator collapses.
+</p>
+
+<img src="{{ site.baseurl }}/assets/2019-05-16/epoch_32_step_20320.png">
+
+<p>
+    Code and model is available <a href="https://github.com/hellomoto-ai/splatoon2-ml/releases/tag/vae-gan-v1.3">here</a>.
+</p>
+
+<h2> References</h2>
+
+<ul>
+    <li> <a target="_blank" href="http://torch.ch/blog/2015/11/13/gan.html">Generating Faces with Torch</a>
+    <li> <a target="_blank" href="https://github.com/soumith/ganhacks">How to Train a GAN? Tips and tricks to make GANs work</a>
+</ul>
+
+{% include github_comment.html issue="6" %}
