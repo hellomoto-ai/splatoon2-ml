@@ -35,14 +35,22 @@ def _fetch_numpy(variable):
     return variable.cpu().detach().numpy()
 
 
-def _get_latent_stats(z):
+def _get_latent_stats(z_mean, z_logvar):
+    z_mean = z_mean.detach()
+    z_logvar = z_logvar.detach()
     # Distance from origin
-    z_dist = torch.norm(z.detach(), dim=1).cpu().numpy()
+    z_mean = torch.norm(z_mean, dim=1).cpu().numpy()
+    # Mean std deviation over latent dimensions
+    z_std = torch.exp(0.5 * z_logvar)
+    z_var = torch.mean(z_std, dim=1).cpu().numpy()
+    # Take average, min, max over batch
     return {
-        'z_dist_mean': np.mean(z_dist),
-        'z_dist_min': np.min(z_dist),
-        'z_dist_max': np.max(z_dist),
-        'z_dist_var': np.var(z_dist),
+        'z_mean': np.mean(z_mean),
+        'z_mean_min': np.min(z_mean),
+        'z_mean_max': np.max(z_mean),
+        'z_var': np.mean(z_var),
+        'z_var_min': np.min(z_var),
+        'z_var_max': np.max(z_var),
     }
 
 
@@ -51,6 +59,9 @@ class Trainer:
             self, model, optimizers,
             train_loader, test_loader,
             device, output_dir,
+            initial_beta=10,
+            beta_step=1e-5,
+            target_kld=0.35,
     ):
         self.model = model.float().to(device)
         self.train_loader = train_loader
@@ -59,10 +70,15 @@ class Trainer:
         self.device = device
         self.output_dir = output_dir
 
+        self.beta = initial_beta
+        self.beta_step = beta_step
+        self.target_kld = target_kld
+
         fields = [
-            'PHASE', 'TIME', 'STEP', 'EPOCH', 'KLD', 'F_RECON',
+            'PHASE', 'TIME', 'STEP', 'EPOCH', 'KLD', 'BETA', 'F_RECON',
             'G_RECON', 'G_FAKE', 'D_REAL', 'D_RECON', 'D_FAKE', 'PIXEL',
-            'Z_DIST_MEAN', 'Z_DIST_MIN', 'Z_DIST_MAX', 'Z_DIST_VAR',
+            'Z_MEAN', 'Z_MEAN_MIN', 'Z_MEAN_MAX',
+            'Z_VAR', 'Z_VAR_MIN', 'Z_VAR_MAX',
         ]
         logfile = open(os.path.join(output_dir, 'result.csv'), 'w')
         self.writer = misc_utils.CSVWriter(fields, logfile)
@@ -73,14 +89,15 @@ class Trainer:
     def _write(self, phase, loss, stats):
         self.writer.write(
             PHASE=phase, STEP=self.step, EPOCH=self.epoch, TIME=time.time(),
-            KLD=loss['latent'],
+            KLD=loss['kld'], BETA=loss['beta'],
             F_RECON=loss['feats_recon'],
             G_RECON=loss['gen_recon'], G_FAKE=loss['gen_fake'],
             D_REAL=loss['disc_orig'],
             D_RECON=loss['disc_recon'], D_FAKE=loss['disc_recon'],
             PIXEL=loss['pixel'],
-            Z_DIST_MEAN=stats['z_dist_mean'], Z_DIST_VAR=stats['z_dist_var'],
-            Z_DIST_MIN=stats['z_dist_min'], Z_DIST_MAX=stats['z_dist_max'],
+            Z_MEAN=stats['z_mean'], Z_VAR=stats['z_var'],
+            Z_MEAN_MIN=stats['z_mean_min'], Z_VAR_MIN=stats['z_var_min'],
+            Z_MEAN_MAX=stats['z_mean_max'], Z_VAR_MAX=stats['z_var_max'],
         )
 
     def save(self):
@@ -118,7 +135,7 @@ class Trainer:
             self.optimizers['discriminator'].step()
 
         # Update discriminator with reconstructed image
-        recon, latent = self.model.ae(orig)
+        recon, latent = self.model.vae(orig)
         preds_recon, _ = self.model.discriminator(recon.detach())
         disc_loss_recon = loss_utils.bce(preds_recon, 0)
         if update:
@@ -135,8 +152,8 @@ class Trainer:
             self.optimizers['decoder'].step()
 
         # Update discriminator with fake image
-        sample = torch.randn_like(latent, requires_grad=True)
-        fake = self.model.ae.decoder(sample)
+        sample = torch.randn_like(latent[0], requires_grad=True)
+        fake = self.model.vae.decoder(sample)
         preds_fake, _ = self.model.discriminator(fake.detach())
         disc_loss_fake = loss_utils.bce(preds_fake, 0)
         if update:
@@ -160,9 +177,9 @@ class Trainer:
             'gen_fake': gen_loss_fake.item(),
         }
 
-    def _forward_ae(self, orig, update=False):
+    def _forward_vae(self, orig, update=False):
         # Update feature
-        recon, z = self.model.ae(orig)
+        recon, _ = self.model.vae(orig)
         _, feats_orig = self.model.discriminator(orig)
         _, feats_recon = self.model.discriminator(recon)
         feats_loss = F.mse_loss(input=feats_recon, target=feats_orig)
@@ -172,36 +189,40 @@ class Trainer:
             self.optimizers['encoder'].step()
             self.optimizers['decoder'].step()
 
-        # Compute KLD
-        with torch.no_grad():
-            latent_loss = loss_utils.kld_loss(
-                z.mean(dim=0), z.var(dim=0)).mean()
-        '''
+        # KLD
+        z_mean, z_logvar = self.model.vae.encoder(orig)
+        kld = torch.mean(loss_utils.kld_loss(z_mean, z_logvar))
         if update:
+            beta_latent_loss = self.beta * kld
             self.model.zero_grad()
-            latent_loss.backward()
+            beta_latent_loss.backward()
             self.optimizers['encoder'].step()
-        '''
+
+        # Update beta
+        if update:
+            beta = self.beta - self.beta_step * (self.target_kld - kld.item())
+            self.beta = max(beta, 0)
 
         loss = {
-            'latent': latent_loss.item(),
+            'kld': kld.item(),
+            'beta': self.beta,
             'feats_recon': feats_loss.item(),
         }
-        stats = _get_latent_stats(z)
+        stats = _get_latent_stats(z_mean, z_logvar)
         return recon, loss, stats
 
     def _get_pixel_loss(self, orig):
-        recon, _ = self.model.ae(orig)
+        recon, _ = self.model.vae(orig)
         return F.mse_loss(orig, recon)
 
     def _forward(self, orig, update=False):
         loss_gan = self._forward_gan(orig, update=update)
-        recon, loss_ae, stats = self._forward_ae(orig, update=update)
+        recon, loss_vae, stats = self._forward_vae(orig, update=update)
         with torch.no_grad():
             pixel_loss = self._get_pixel_loss(orig)
 
         loss = {'pixel': pixel_loss.item()}
-        loss.update(loss_ae)
+        loss.update(loss_vae)
         loss.update(loss_gan)
         return recon, loss, stats
 
@@ -244,6 +265,11 @@ class Trainer:
         opt = '\n'.join([
             '%s: %s' % (key, val) for key, val in self.optimizers.items()
         ])
-        return 'Epoch: %d\nStep: %d\nModel: %s\nOptimizers: %s\n' % (
-            self.epoch, self.step, self.model, opt
+        beta = '\n'.join([
+            'Beta: %s' % self.beta,
+            'Beta Step: %s' % self.beta_step,
+            'Target KLD: %s' % self.target_kld,
+        ])
+        return 'Epoch: %d\nStep: %d\nModel: %s\nOptimizers: %s\nBeta: %s\n' % (
+            self.epoch, self.step, self.model, opt, beta
         )

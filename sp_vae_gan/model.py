@@ -36,15 +36,14 @@ class Encoder(nn.Module):
             *[EncoderBlock(*channels[i:i+2]) for i in range(len(channels)-1)]
         )
         n_features = feat_size[0] * feat_size[1] * channels[-1]
-        self.map = nn.Sequential(
-            nn.Linear(n_features, num_latent, bias=False),
-            nn.BatchNorm1d(num_features=num_latent),
-        )
+        self.map = nn.Linear(n_features, 2 * num_latent)
 
     def forward(self, x):
         x = self.convs(x)
-        z = self.map(x.view(x.size()[0], -1))
-        return z
+        x = x.view(x.size()[0], -1)
+        z = self.map(x)
+        z_mean, z_logvar = z[:, :self.num_latent], z[:, self.num_latent:]
+        return z_mean, z_logvar
 
 
 class Decoder(nn.Module):
@@ -73,16 +72,17 @@ class Decoder(nn.Module):
         return torch.tanh(self.convs(x))
 
 
-class AE(nn.Module):
+class VAE(nn.Module):
     def __init__(self, encoder, decoder):
         super().__init__()
         self.encoder = encoder
         self.decoder = decoder
 
     def forward(self, orig):
-        z = self.encoder(orig)
-        recon = self.decoder(z)
-        return recon, z
+        z_mean, z_logvar = self.encoder(orig)
+        z_std = torch.exp(0.5 * z_logvar)
+        recon = self.decoder(z_mean + z_std * torch.randn_like(z_std))
+        return recon, (z_mean, z_logvar)
 
 
 class Discriminator(nn.Module):
@@ -115,19 +115,20 @@ class Discriminator(nn.Module):
         return x, x_feats
 
 
-class AeGan(nn.Module):
-    def __init__(self, ae, discriminator):
+class VaeGan(nn.Module):
+    def __init__(self, vae, discriminator):
         super().__init__()
-        self.ae = ae
+        self.vae = vae
         self.discriminator = discriminator
 
     def forward(self, orig):
-        raise NotImplementedError('Use `model.ae` or `model.discrinimator`.')
+        raise NotImplementedError('Use `model.vae` or `model.discrinimator`.')
 
 
 def get_model(feat_size=(9, 16), n_latent=1024):
     encoder = Encoder(feat_size, n_latent)
     decoder = Decoder(feat_size, n_latent)
     discriminator = Discriminator(feat_size)
-    model = AeGan(AE(encoder, decoder), discriminator)
-    return model
+    vae = VAE(encoder, decoder)
+    vae_gan = VaeGan(vae, discriminator)
+    return vae_gan

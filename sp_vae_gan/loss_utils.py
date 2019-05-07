@@ -3,24 +3,23 @@ import torch.nn.functional as F
 
 
 def format_loss_header():
-    return ' '.join(['%10s'] * 8) % (
-        'KLD', 'F_RECON',
+    return ' '.join(['%10s'] * 9) % (
+        'KLD', 'BETA', 'F_RECON',
         'G_RECON', 'G_FAKE', 'D_REAL', 'D_RECON', 'D_FAKE', '[PIXEL]',
     )
 
 
 def format_loss_dict(loss):
-    return ' '.join(['%10.2e'] * 8) % (
-        loss['latent'], loss['feats_recon'],
+    return ' '.join(['%10.2e'] * 9) % (
+        loss['kld'], loss['beta'], loss['feats_recon'],
         loss['gen_recon'], loss['gen_fake'],
         loss['disc_orig'], loss['disc_recon'], loss['disc_fake'],
         loss['pixel'],
     )
 
 
-def kld_loss(mean, var):
-    logvar = torch.log(var.clamp_(min=1e-12))
-    return - 0.5 * (1 + logvar - mean.pow(2) - var)
+def kld_loss(mean, logvar):
+    return - 0.5 * (1 + logvar - mean.pow(2) - logvar.exp())
 
 
 def bce(var, target):
