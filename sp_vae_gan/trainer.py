@@ -59,8 +59,8 @@ class Trainer:
             self, model, optimizers,
             train_loader, test_loader,
             device, output_dir,
-            initial_beta=10,
-            beta_step=1e-5,
+            initial_beta=1,
+            beta_step=0.1,
             target_kld=0.35,
     ):
         self.model = model.float().to(device)
