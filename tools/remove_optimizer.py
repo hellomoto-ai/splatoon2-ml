@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import argparse
 
 import torch
@@ -8,13 +8,14 @@ def _parse_args():
     parser = argparse.ArgumentParser(
         description='From checkpoint file, remove optimizer for publish.'
     )
-    parser.add_argument('--input', '-i', help='Input checkpoint file.')
-    parser.add_argument('--output', '-o', help='Output checkpoint file.')
+    parser.add_argument(
+        '--input', '-i', required=True,
+        help='Input checkpoint file.')
+    parser.add_argument(
+        '--output', '-o', required=True,
+        help='Output checkpoint file.')
     return parser.parse_args()
 
-
-def _process(data):
-    print(data.keys())
 
 def _main():
     args = _parse_args()
