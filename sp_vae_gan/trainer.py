@@ -35,22 +35,13 @@ def _fetch_numpy(variable):
     return variable.cpu().detach().numpy()
 
 
-def _get_latent_stats(z_mean, z_logvar):
-    z_mean = z_mean.detach()
-    z_logvar = z_logvar.detach()
-    # Distance from origin
-    z_mean = torch.norm(z_mean, dim=1).cpu().numpy()
-    # Mean std deviation over latent dimensions
-    z_std = torch.exp(0.5 * z_logvar)
-    z_var = torch.mean(z_std, dim=1).cpu().numpy()
-    # Take average, min, max over batch
+def _get_latent_stats(z):
+    z = z.detach().cpu().numpy()
     return {
-        'z_mean': np.mean(z_mean),
-        'z_mean_min': np.min(z_mean),
-        'z_mean_max': np.max(z_mean),
-        'z_var': np.mean(z_var),
-        'z_var_min': np.min(z_var),
-        'z_var_max': np.max(z_var),
+        'z_mean': np.mean(z),
+        'z_min': np.min(z),
+        'z_max': np.max(z),
+        'z_var': np.var(z),
     }
 
 
@@ -59,7 +50,7 @@ class Trainer:
             self, model, optimizers,
             train_loader, test_loader,
             device, output_dir,
-            initial_beta=1,
+            initial_beta=1.0,
             beta_step=0.1,
             target_kld=0.35,
     ):
@@ -77,8 +68,7 @@ class Trainer:
         fields = [
             'PHASE', 'TIME', 'STEP', 'EPOCH', 'KLD', 'BETA', 'F_RECON',
             'G_RECON', 'G_FAKE', 'D_REAL', 'D_RECON', 'D_FAKE', 'PIXEL',
-            'Z_MEAN', 'Z_MEAN_MIN', 'Z_MEAN_MAX',
-            'Z_VAR', 'Z_VAR_MIN', 'Z_VAR_MAX',
+            'Z_MEAN', 'Z_MIN', 'Z_MAX', 'Z_VAR',
         ]
         logfile = open(os.path.join(output_dir, 'result.csv'), 'w')
         self.writer = misc_utils.CSVWriter(fields, logfile)
@@ -96,8 +86,7 @@ class Trainer:
             D_RECON=loss['disc_recon'], D_FAKE=loss['disc_fake'],
             PIXEL=loss['pixel'],
             Z_MEAN=stats['z_mean'], Z_VAR=stats['z_var'],
-            Z_MEAN_MIN=stats['z_mean_min'], Z_VAR_MIN=stats['z_var_min'],
-            Z_MEAN_MAX=stats['z_mean_max'], Z_VAR_MAX=stats['z_var_max'],
+            Z_MIN=stats['z_min'], Z_MAX=stats['z_max'],
         )
 
     def save(self):
@@ -135,7 +124,7 @@ class Trainer:
             self.optimizers['discriminator'].step()
 
         # Update discriminator with reconstructed image
-        recon, latent = self.model.vae(orig)
+        recon, sample = self.model.vae(orig)
         preds_recon, _ = self.model.discriminator(recon.detach())
         disc_loss_recon = loss_utils.bce(preds_recon, 0)
         if update:
@@ -152,7 +141,7 @@ class Trainer:
             self.optimizers['decoder'].step()
 
         # Update discriminator with fake image
-        sample = torch.randn_like(latent[0], requires_grad=True)
+        sample = torch.randn_like(sample, requires_grad=True)
         fake = self.model.vae.decoder(sample)
         preds_fake, _ = self.model.discriminator(fake.detach())
         disc_loss_fake = loss_utils.bce(preds_fake, 0)
@@ -190,25 +179,26 @@ class Trainer:
             self.optimizers['decoder'].step()
 
         # KLD
-        z_mean, z_logvar = self.model.vae.encoder(orig)
-        kld = torch.mean(loss_utils.kld_loss(z_mean, z_logvar))
+        sample = self.model.vae.encoder(orig)
+        kld = torch.mean(loss_utils.kld_loss(sample))
         if update:
             beta_latent_loss = self.beta * kld
             self.model.zero_grad()
             beta_latent_loss.backward()
             self.optimizers['encoder'].step()
 
-        # Update beta
+        # Adjust beta
         if update:
-            beta = self.beta - self.beta_step * (self.target_kld - kld.item())
-            self.beta = max(beta, 0)
+            # Use hinge loss
+            kld_error = max(0, kld.item() - self.target_kld)
+            self.beta += self.beta_step * kld_error
 
         loss = {
             'kld': kld.item(),
             'beta': self.beta,
             'feats_recon': feats_loss.item(),
         }
-        stats = _get_latent_stats(z_mean, z_logvar)
+        stats = _get_latent_stats(sample)
         return recon, loss, stats
 
     def _get_pixel_loss(self, orig):

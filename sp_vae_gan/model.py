@@ -43,7 +43,9 @@ class Encoder(nn.Module):
         x = x.view(x.size()[0], -1)
         z = self.map(x)
         z_mean, z_logvar = z[:, :self.num_latent], z[:, self.num_latent:]
-        return z_mean, z_logvar
+        z_std = torch.exp(0.5 * z_logvar)
+        sample = z_mean + z_std * torch.randn_like(z_std)
+        return sample
 
 
 class Decoder(nn.Module):
@@ -79,10 +81,9 @@ class VAE(nn.Module):
         self.decoder = decoder
 
     def forward(self, orig):
-        z_mean, z_logvar = self.encoder(orig)
-        z_std = torch.exp(0.5 * z_logvar)
-        recon = self.decoder(z_mean + z_std * torch.randn_like(z_std))
-        return recon, (z_mean, z_logvar)
+        sample = self.encoder(orig)
+        recon = self.decoder(sample)
+        return recon, sample
 
 
 class Discriminator(nn.Module):
