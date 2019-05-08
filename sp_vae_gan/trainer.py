@@ -93,7 +93,7 @@ class Trainer:
             F_RECON=loss['feats_recon'],
             G_RECON=loss['gen_recon'], G_FAKE=loss['gen_fake'],
             D_REAL=loss['disc_orig'],
-            D_RECON=loss['disc_recon'], D_FAKE=loss['disc_recon'],
+            D_RECON=loss['disc_recon'], D_FAKE=loss['disc_fake'],
             PIXEL=loss['pixel'],
             Z_MEAN=stats['z_mean'], Z_VAR=stats['z_var'],
             Z_MEAN_MIN=stats['z_mean_min'], Z_VAR_MIN=stats['z_var_min'],
