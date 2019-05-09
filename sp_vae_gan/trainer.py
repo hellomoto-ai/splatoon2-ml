@@ -50,9 +50,9 @@ class Trainer:
             self, model, optimizers,
             train_loader, test_loader,
             device, output_dir,
-            initial_beta=1.0,
+            initial_beta=10.0,
             beta_step=0.1,
-            target_kld=0.35,
+            target_kld=0.2,
     ):
         self.model = model.float().to(device)
         self.train_loader = train_loader
@@ -189,8 +189,7 @@ class Trainer:
 
         # Adjust beta
         if update:
-            # Use hinge loss
-            kld_error = max(0, kld.item() - self.target_kld)
+            kld_error = kld.item() - self.target_kld
             self.beta += self.beta_step * kld_error
 
         loss = {
