@@ -251,6 +251,17 @@ class Trainer:
         self._write('test', loss_tracker, stats)
         _LG.info('         %s', loss_utils.format_loss_dict(loss_tracker))
 
+    def generate(self, samples):
+        with torch.no_grad():
+            self._generate(samples)
+
+    def _generate(self, samples):
+        self.model.eval()
+        recons = self.model.vae.decoder(samples)
+        for i, recon in enumerate(recons):
+            path = 'sample_%d.png' % i
+            _save_images([recon], path, self.step, self.output_dir)
+
     def __repr__(self):
         opt = '\n'.join([
             '%s: %s' % (key, val) for key, val in self.optimizers.items()

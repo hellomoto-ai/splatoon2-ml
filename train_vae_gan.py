@@ -6,6 +6,7 @@ import logging
 import argparse
 
 import torch
+import numpy as np
 
 import sp_vae_gan.dataloader
 import sp_vae_gan.model
@@ -60,6 +61,12 @@ def _parse_args():
     return parser.parse_args()
 
 
+def _get_samples(num_features, device, batch_size=32, seed=0):
+    rng = np.random.RandomState(seed)
+    samples = rng.randn(batch_size, num_features)
+    return torch.tensor(samples, device=device).float().to(device)
+
+
 def _get_trainer(args):
     device = torch.device(
         'cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
@@ -91,13 +98,16 @@ def _get_trainer(args):
     )
     if args.checkpoint:
         trainer.load(args.checkpoint)
-    return trainer
+    samples = _get_samples(1024, device)
+    return trainer, samples
 
 
 def _run_main(args):
-    trainer = _get_trainer(args)
+    trainer, samples = _get_trainer(args)
     _LG.info('\n%s', trainer)
     _LG.info('Batch size: %s', args.batch_size)
+    _LG.info('Epoch: %d - Sample Generation', trainer.epoch)
+    trainer.generate(samples)
     _LG.info('Epoch: %d - Test', trainer.epoch)
     trainer.test()
     for _ in range(args.epoch):
@@ -106,6 +116,8 @@ def _run_main(args):
             trainer.train()
         finally:
             trainer.save()
+        _LG.info('Epoch: %d - Sample Generation', trainer.epoch)
+        trainer.generate(samples)
         _LG.info('Epoch: %d - Test', trainer.epoch)
         trainer.test()
 
