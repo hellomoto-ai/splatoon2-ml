@@ -191,6 +191,7 @@ class Trainer:
         if update:
             kld_error = kld.item() - self.target_kld
             self.beta += self.beta_step * kld_error
+            self.beta = max(1e-3, self.beta)
 
         loss = {
             'kld': kld.item(),
