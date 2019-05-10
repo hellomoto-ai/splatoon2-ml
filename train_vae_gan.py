@@ -91,7 +91,8 @@ def _get_trainer(args):
     optimizers = {
         'encoder': opt(model.vae.encoder.parameters(), lr=args.lr),
         'decoder': opt(model.vae.decoder.parameters(), lr=args.lr),
-        'discriminator': opt(model.discriminator.parameters(), lr=args.lr),
+        'discriminator': opt(
+            model.discriminator.parameters(), lr=args.lr, weight_decay=1e-5),
     }
     trainer = sp_vae_gan.trainer.Trainer(
         model, optimizers, train_loader, test_loader, device, args.output_dir,
