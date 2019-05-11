@@ -47,6 +47,22 @@ def _prod(vals):
 
 
 class VideoLoader:
+    """Slice frames from video in uint8 CHW-RGB format.
+
+    Parameters
+    ----------
+    path : str
+        Path to input video
+
+    scale : tuple of int
+        (width, height)
+
+    frame_rate : int
+        Frame rate
+
+    debug : bool
+        If True, underlying FFMpeg process log is not suppressed.
+    """
     def __init__(self, path, scale, frame_rate=30, debug=False):
         self.path = path
         self.scale = scale
@@ -142,7 +158,13 @@ class VideoSaver:
         self.process.wait(3)
 
     def write(self, frame):
-        self.process.stdin.write(frame)
+        if frame.dtype != np.uint8:
+            raise ValueError('Frame must be uint8 type.')
+        if frame.ndim != 3:
+            raise ValueError('Frame must be 3D array. (HWC)')
+        if frame.shape[2] != 3:
+            raise ValueError('Frame must have 3 channels (RGB)')
+        self.process.stdin.write(frame.tostring())
 
     def flush(self):
         self.process.stdin.flush()

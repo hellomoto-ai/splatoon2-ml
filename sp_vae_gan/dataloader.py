@@ -1,6 +1,7 @@
 import os
 import logging
 
+import numpy as np
 import torch.utils.data
 
 from sp_vae_gan import image_util
@@ -50,11 +51,18 @@ class Dataset(torch.utils.data.Dataset):
         return {'image': image, 'class': class_, 'path': path}
 
 
+def _encode(buffer_):
+    batch = 2 * np.asarray(buffer_, dtype='float') / 255 - 1.0
+    return torch.from_numpy(batch)
+
+
 class VideoDataset(torch.utils.data.Dataset):
     """Extract frames from video"""
     def __init__(
-            self, input_file, frame_rate=30, frame_dim=(121, 65), debug=False):
+            self, input_file, batch_size=32,
+            frame_rate=30, frame_dim=(121, 65), debug=False):
         self.input_file = input_file
+        self.batch_size = batch_size
         self.frame_rate = frame_rate
         self.frame_width, self.frame_height = frame_dim
         self.debug = debug
@@ -65,8 +73,15 @@ class VideoDataset(torch.utils.data.Dataset):
             scale=(self.frame_width, self.frame_height),
             frame_rate=self.frame_rate, debug=self.debug
         )
+        buffer_ = []
         with loader:
-            yield from loader
+            for frame in loader:
+                buffer_.append(frame)
+                if len(buffer_) >= self.batch_size:
+                    yield _encode(buffer_)
+                    buffer_ = []
+            if buffer_:
+                yield _encode(buffer_)
 
 
 def get_dataloader(flist, data_dir, batch_size, scale, shuffle=True):

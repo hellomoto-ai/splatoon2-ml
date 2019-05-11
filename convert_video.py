@@ -34,29 +34,11 @@ def _load_model(path):
     return model
 
 
-def _encode(buffer_):
-    batch = 2 * np.asarray(buffer_, dtype='float') / 255 - 1.0
-    return torch.from_numpy(batch)
-
-
-def _get_loader(input_file, scale, batch_size=32, debug=False):
-    dataset = sp_vae_gan.dataloader.VideoDataset(
-        input_file, frame_rate=30, frame_dim=scale, debug=debug)
-    buffer_ = []
-    for frame in dataset:
-        buffer_.append(frame)
-        if len(buffer_) >= batch_size:
-            yield _encode(buffer_)
-            buffer_ = []
-    if buffer_:
-        yield _encode(buffer_)
-
-
-def _slice(data):
-    buffer_ = 255 * (data / 2.0 + 0.5)
-    buffer_ = buffer_.astype('uint8').transpose(0, 2, 3, 1)
-    for frame in buffer_:
-        yield frame.tostring()
+def _combine(image, recon):
+    output = np.concatenate((image, recon), axis=3)
+    output = output[:, :, :64, :]
+    output = 255 * (output / 2.0 + 0.5)
+    return output.astype('uint8').transpose(0, 2, 3, 1)
 
 
 def _copy_audio(src_audio, video, output):
@@ -72,26 +54,36 @@ def _copy_audio(src_audio, video, output):
 
 def _main():
     args = _parse_args()
+    _init_logger(args.debug)
     _LG.info('Loading model from %s', args.model)
     model = _load_model(args.model).float()
     _LG.info('Openinig video %s', args.video)
-    frame_generator = _get_loader(args.video, (121, 65), debug=args.debug)
+    frame_generator = sp_vae_gan.dataloader.VideoDataset(
+        args.video, frame_rate=30, frame_dim=(121, 65), debug=args.debug)
     with tempfile.NamedTemporaryFile('wb', suffix='.mp4') as tmp:
         saver = image_util.VideoSaver(tmp.name, (242, 64), debug=args.debug)
         with saver, torch.no_grad():
             for image in frame_generator:
-                image = image.float()
-                z_mean, _ = model.vae.encoder(image)
-                recon = model.vae.decoder(z_mean)
-
-                output = np.concatenate(
-                    (image.data.numpy(), recon.data.numpy()), axis=3)
-                output = output[:, :, :64, :]
-                for frame in _slice(output):
+                mu, _ = model.vae.encoder(image.float())
+                recon = model.vae.decoder(mu)
+                for frame in _combine(image.numpy(), recon.numpy()):
                     saver.write(frame)
                 saver.flush()
         _LG.info('Saving video %s', args.output)
         _copy_audio(args.video, tmp.name, args.output)
+
+
+def _init_logger(debug):
+    format_ = (
+        '%(asctime)s: %(levelname)5s: %(message)s' if not debug else
+        '%(asctime)s: %(levelname)5s: %(funcName)10s: %(lineno)d %(message)s'
+    )
+
+    logging.basicConfig(
+        format=format_,
+        level=logging.DEBUG if debug else logging.INFO,
+    )
+    logging.getLogger('PIL').setLevel(logging.WARNING)
 
 
 if __name__ == '__main__':
