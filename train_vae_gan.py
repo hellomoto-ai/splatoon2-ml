@@ -99,7 +99,7 @@ def _get_trainer(args):
     )
     if args.checkpoint:
         trainer.load(args.checkpoint)
-    samples = _get_samples(256, device)
+    samples = _get_samples(1024, device)
     return trainer, samples
 
 
