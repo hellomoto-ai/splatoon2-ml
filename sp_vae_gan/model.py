@@ -126,7 +126,7 @@ class VaeGan(nn.Module):
         raise NotImplementedError('Use `model.vae` or `model.discrinimator`.')
 
 
-def get_model(feat_size=(9, 16), n_latent=512):
+def get_model(feat_size=(9, 16), n_latent=256):
     encoder = Encoder(feat_size, n_latent)
     decoder = Decoder(feat_size, n_latent)
     discriminator = Discriminator(feat_size)
