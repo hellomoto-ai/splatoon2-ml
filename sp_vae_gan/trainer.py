@@ -124,7 +124,7 @@ class Trainer:
             self.optimizers['discriminator'].step()
 
         # Update discriminator with reconstructed image
-        recon, sample = self.model.vae(orig)
+        recon, latent = self.model.vae(orig)
         preds_recon, _ = self.model.discriminator(recon.detach())
         disc_loss_recon = loss_utils.bce(preds_recon, 0)
         if update:
@@ -141,7 +141,7 @@ class Trainer:
             self.optimizers['decoder'].step()
 
         # Update discriminator with fake image
-        sample = torch.randn_like(sample, requires_grad=True)
+        sample = torch.randn_like(latent[0], requires_grad=True)
         fake = self.model.vae.decoder(sample)
         preds_fake, _ = self.model.discriminator(fake.detach())
         disc_loss_fake = loss_utils.bce(preds_fake, 0)
@@ -179,8 +179,8 @@ class Trainer:
             self.optimizers['decoder'].step()
 
         # KLD
-        sample = self.model.vae.encoder(orig)
-        kld = torch.mean(loss_utils.kld_loss(sample))
+        latent = self.model.vae.encoder(orig)
+        kld = torch.mean(loss_utils.kld_loss(*latent))
         if update:
             beta_latent_loss = self.beta * kld
             self.model.zero_grad()
@@ -198,7 +198,7 @@ class Trainer:
             'beta': self.beta,
             'feats_recon': feats_loss.item(),
         }
-        stats = _get_latent_stats(sample)
+        stats = _get_latent_stats(latent[0])
         return recon, loss, stats
 
     def _get_pixel_loss(self, orig):

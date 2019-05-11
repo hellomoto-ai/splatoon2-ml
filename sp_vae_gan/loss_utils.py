@@ -18,11 +18,8 @@ def format_loss_dict(loss):
     )
 
 
-def kld_loss(samples):
-    mean = samples.mean(dim=0)
-    var = samples.var(dim=0)
-    logvar = torch.log(var.clamp_(min=1e-12))
-    return - 0.5 * (1 + logvar - mean.pow(2) - var)
+def kld_loss(mean, logvar):
+    return - 0.5 * (1 + logvar - mean.pow(2) - logvar.exp())
 
 
 def bce(var, target):
