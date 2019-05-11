@@ -1,0 +1,141 @@
+---
+layout: post
+title:  "VAE-GAN Part5: VAE-GAN with adaptive β"
+date:   2019-05-23 00:00:00 +0000
+categories: vae-gan
+mathjax: true
+---
+
+<p>
+    In the previous post, I could successfully map the latent distribution around the origin, while reducing the reconstruction error, and as the result, I could create fake images from randomly sampled latent vectors. However the adoptation of Batch Normalization still felt cheating, so I looked for a way to archive a similar performance without Batch Normalization. Along the way I found <a href="https://arxiv.org/abs/1810.00821"> this paper by Peng et al</a> via <a href="https://medium.com/@animeshsk3/v-gan-variational-discriminator-bottleneck-an-unfair-fight-between-generator-and-discriminator-972563532dcc">this medium article</a>. The model being discussed in the paper is Variational GAN, which is different from VAE-GAN, but it has the exact same requirement I am handling, which is enfording the distribution of intermediate output to be Gaussian, and the paper proposed adjusting $\beta$ in a way that KL Divergence is always close to target value.
+</p>
+
+<div style="border-left:5px solid gray;padding-left:20px;text-align:justify;">
+<cite>
+    ... enforcing a specific mutual information budget between $\mathbf{x}$ and $\mathbf{z}$ is critical for good performance. We therefore adaptively update $\beta$ via dual gradient descent to enforce a specific constraint $I_{c}$ on the mutual information.
+
+    $$
+    \mathcal{\beta} \leftarrow max(0, \beta + \alpha_{\beta} (\mathbb{E}_{\mathbf{x} \sim \tilde{p}(\mathbf{x})}[KL[E(\mathbf{z}|\mathbf{x})||r(\mathbf{z})]] - I_c ))
+    $$
+    
+</cite>
+</div>
+
+<!--more-->
+
+<p>
+    which is implemented as follow in <a href="https://github.com/akanazawa/vgan/blob/29dccfde15ce79fa9f8e869c9bab48878fe52a79/gan_training/train.py#L158-L163">the official code</a>.
+</p>
+{% highlight python%}
+new_beta = beta - self.beta_step * (self.target_kl - avg_kl)
+new_beta = max(new_beta, 0)
+{% endhighlight %}
+
+<p>
+    I adopted this method to my VAE-GAN and ran couple of experiments. Also, I modified KL Divergence loss computation so that KLD is computed over batch samples for each latent dimension, like Batch Normalization. The typical implementation of KLD looks somehwat weird to me. The following code is from <a href="https://github.com/pytorch/examples/blob/master/vae/main.py#L80">PyTorch's official implementation</a>.
+</p>
+
+{% highlight python %}
+# mu and logvar are decoder output
+KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+{% endhighlight %}
+<p>
+    In this implementation, KLD is 0 when $mu$ is 0 and $var$ is 1. But $mu$ and $var$ are decoder output, and together they represent probability of sample in latent vector of specific input image. This implementation is trying to map all the samples to have normal distribution, instead of having the distribution of the latent samples to follow normal distribution. I do not know how this implementation is justified, but so far, I did not find any alternative implemntation. In my new implementation, I modified this to the following.
+</p>
+
+{% highlight python %}
+def reparameterize(mu, logvar):
+    std = torch.exp(0.5*logvar)
+    eps = torch.randn_like(std)
+    return mu + eps*std
+
+
+sample = reparameterize(mu, logvar)
+
+
+def kld(samples):
+    # 0 is batch dimension
+    mean = samples.mean(dim=0)
+    var = samples.var(dim=0)
+    logvar = torch.log(var.clamp_(min=1e-12))
+    return - 0.5 * (1 + logvar - mean.pow(2) - var)
+{% endhighlight  %}
+
+<h2>Result</h2>
+
+<p>
+    The KL-Divergence is distributted around the target value, and the value of $\beta$ grows as the training progresses, which matches the observations we have seen so far. When running experiments, I observed that large initial $\beta$ value excels the training, which is also stated in the paper (Which is interesting but I have no idea why).
+</p>
+
+<center><img src="{{ site.baseurl }}/assets/2019-05-23/kld.svg"></center>
+<center><img src="{{ site.baseurl }}/assets/2019-05-23/beta.svg"></center>
+
+<p>
+    The reconstruction loss on test set goes bellow 1.0. It could go down farther but the fake image genaration starts to collapse.
+</p>
+
+<center><img src="{{ site.baseurl }}/assets/2019-05-23/pixel.svg"></center>
+
+<p>
+    The latent samples encoded from input images are distributed around the origin.
+</p>
+<center><img src="{{ site.baseurl }}/assets/2019-05-23/latent.svg"></center>
+
+<p>
+    The features matching errors grow as training proceeds.
+</p>
+
+<center><img src="{{ site.baseurl }}/assets/2019-05-23/feats.svg"></center>
+<center><img src="{{ site.baseurl }}/assets/2019-05-23/gan.svg"></center>
+
+
+<h2>Observations</h2>
+
+<h3>Reconstruction Quality</h3>
+<p>
+    No noticible difference between different target KL-Divergence 0.1 and 0.2.
+</p>
+
+<style>
+ tbody tr:nth-child(odd) td{
+     background: none;
+     background-color: transparent;
+ }
+ td {
+     border: none;
+ }
+ table {
+     border: none;
+ }
+</style>
+
+<table>
+    <tbody>
+	<tr>
+	    <td>
+		<figure>
+		    <img src="{{ site.baseurl }}/assets/2019-05-23/step_41910_4cc2090.png" width="100%">
+		    <center><figcaption>Target KLD: 0.1</figcaption></center>
+		</figure>
+	    </td>
+	    <td>
+		<figure>
+		    <img src="{{ site.baseurl }}/assets/2019-05-23/step_41910_c1e1692.png" width="100%">
+		    <center><figcaption>Target KLD: 0.2</figcaption></center>
+		</figure>
+	    </td>
+	</tr>
+    </tbody>
+</table>
+
+<h3>Mode Collapse</h3>
+
+<p>
+    Similarly to <a href="https://hellomoto-ai.github.io/splatoon2-ml/vae-gan/2019/05/15/vae-gan-pt4/">the previous experiment</a>, fake images collupse to black screen.
+</p>
+
+<center><img src="{{ site.baseurl }}/assets/2019-05-23/sample_11.gif" width="75%"></center>
+
+<h2>Model & code</h2>
+
+Code and model is available <a href="https://github.com/hellomoto-ai/splatoon2-ml/releases/tag/vae-gan-v1.4">here</a>

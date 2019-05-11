@@ -32,7 +32,7 @@ def _main():
         for filename in os.listdir(args.input)
     ]
     files.sort(key=_get_suffix)
-    files = files[:60]
+    files = files
     images = [imageio.imread(f) for f in files]
     duration = [args.duration for _ in range(len(images))]
     duration[0] = 1.0
