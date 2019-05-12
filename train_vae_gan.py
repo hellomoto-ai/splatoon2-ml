@@ -9,7 +9,7 @@ import torch
 import numpy as np
 
 import sp_vae_gan.dataloader
-import sp_vae_gan.model
+import sp_vae_gan.models.vae_gan
 import sp_vae_gan.trainer
 
 
@@ -77,6 +77,7 @@ def _get_trainer(args):
     # convolution, input size is (f(f(f(16))), f(f(f(9)))) = (121, 65)
     # where f(x) = 2x - 1
     scale = (121, 65)
+    n_latent = 1024
     train_loader = sp_vae_gan.dataloader.get_dataloader(
         args.train_flist, args.data_dir, args.batch_size, scale)
     # To output the same image over epochs to observe evolution of model,
@@ -86,7 +87,7 @@ def _get_trainer(args):
         args.test_flist, args.data_dir,
         min(16, args.batch_size), scale, shuffle=False,
     )
-    model = sp_vae_gan.model.get_model()
+    model = sp_vae_gan.models.vae_gan.get_model(n_latent)
     opt = torch.optim.Adam
     optimizers = {
         'encoder': opt(model.vae.encoder.parameters(), lr=args.lr),
@@ -98,7 +99,7 @@ def _get_trainer(args):
     )
     if args.checkpoint:
         trainer.load(args.checkpoint)
-    samples = _get_samples(1024, device)
+    samples = _get_samples(n_latent, device)
     return trainer, samples
 
 
