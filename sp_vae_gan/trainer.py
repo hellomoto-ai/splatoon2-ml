@@ -52,7 +52,7 @@ class Trainer:
             device, output_dir,
             initial_beta=10.0,
             beta_step=0.1,
-            target_kld=0.5,
+            target_kld=0.05,
     ):
         self.model = model.float().to(device)
         self.train_loader = train_loader
