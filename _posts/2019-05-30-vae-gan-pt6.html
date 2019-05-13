@@ -1,0 +1,86 @@
+---
+layout: post
+title:  "VAE-GAN Part6: VAE-GAN with adoptive β 2"
+date:   2019-05-30 00:00:00 +0000
+categories: vae-gan
+mathjax: true
+---
+
+<p>
+    After running more experiments, I found that the conventional computation of KLD as described in <a href="{{ site.baseurl }}/vae-gan/2019/05/23/vae-gan-with-adaptive-beta/">the previous post</a> works fine.
+</p>
+
+{% highlight python%}
+new_beta = beta - beta_step * (target_kl - avg_kl)
+new_beta = max(new_beta, 0)
+{% endhighlight %}
+
+
+In the following experiments, I fixed the following parameters and changed target KLD.
+
+{% highlight python %}
+beta_step = 0.1
+initial_beta = 10.0
+{% endhighlight %}
+
+<!--more-->
+
+<center><img src="{{ site.baseurl }}/assets/2019-05-30/kld.svg"></center>
+<center><img src="{{ site.baseurl }}/assets/2019-05-30/pixel.svg"></center>
+
+<p>
+    It seems that when target KLD is too small (i.e. 0.05), projected samples are too much concentrated and the detail of the input images cannot be recovered.
+</p>
+<p>
+    For larger side of target KLD (0.2, 0.5), larger values seems to yield better reconstruction. However, at target KLD = 0.1, the convergence of the measured KLD shows very different tendency from the rest. Without repeating the same experiments, it's hard to say if there is something special about target KLD = 0.1, or it is an outlier tendency caused by randomness.
+</p>
+
+<p>
+    The peculiar tendency of target KLD = 0.1, can be also seen in $\beta$ value tendency. The next figure shows how $\beta$ is changed over the training. In case of target KLD = 0.1, the value of $\beta$ is order of magnitude larger than the rest. The encoder is trying so hard to move the latent samples father from the origin, so as to reduce reconstruction error.
+</p>
+
+<center><img src="{{ site.baseurl }}/assets/2019-05-30/beta.svg"></center>
+
+<p>
+    At this point, I realize that actually, this is derived from the scale of feature matching error.
+</p>
+
+<center><img src="{{ site.baseurl }}/assets/2019-05-30/feats.svg"></center>
+
+<p>
+    Right now, the implementation of feature extraction in descriminator is, multiple convolution without any non-linear activations.
+</p>
+
+{% highlight python %}
+nn.Sequential(
+    nn.ReflectionPad2d(2),
+    nn.Conv2d(3, 32, kernel_size=5),
+    nn.ReflectionPad2d(2),
+    nn.Conv2d(32, 128, kernel_size=5, stride=2),
+    nn.ReflectionPad2d(2),
+    nn.Conv2d(128, 256, kernel_size=5, stride=2),
+    nn.ReflectionPad2d(2),
+    nn.Conv2d(256, 256, kernel_size=5, stride=2),
+)
+{% endhighlight %}
+
+
+<p>
+    What can I do to circumvent this? Applying Batch Normalization is a saimple way to regulate output value range. Quick googling and I found some implementations.
+</p>
+
+<ul>
+    <li>
+	<a target="_blank" href="https://github.com/openai/improved-gan/blob/0b7ed92e47ff7047701be3e10a3bd6363999f5e7/imagenet/discriminator.py#L5-L109">The official implementation</a> of <a target="_blank" href="https://arxiv.org/abs/1606.03498">Improved Techniques for Training GANs</a> uses (Convolution -> Batch Normalization -> Leaky ReLU) and linear transform.
+    </li>
+    <li>
+	<a href="https://medium.com/@jos.vandewolfshaar/semi-supervised-learning-with-gans-23255865d0a4">This implementation</a> uses Leaky ReLU and drop out.
+    </li>
+    
+</ul>
+
+<h2>References</h2>
+
+<ul>
+    <li><a target="_blank" href="https://arxiv.org/abs/1606.03498">Improved Techniques for Training GANs</a></li>
+</ul>
