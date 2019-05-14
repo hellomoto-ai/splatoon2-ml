@@ -60,28 +60,34 @@ class VideoLoader:
     frame_rate : int
         Frame rate
 
+    seek : int or None
+        Seek start time "-ss" option of FFMpeg
+
     debug : bool
         If True, underlying FFMpeg process log is not suppressed.
     """
-    def __init__(self, path, scale, frame_rate=30, debug=False):
+    def __init__(self, path, scale, frame_rate=30, seek=None, debug=False):
         self.path = path
         self.scale = scale
         self.frame_rate = frame_rate
+        self.seek = seek
         self.debug = debug
         self.process = None
 
     def __enter__(self):
         width, height = self.scale
-        command = [
-            'ffmpeg',
-            '-hide_banner',
+        command = ['ffmpeg', '-hide_banner']
+        if self.seek is not None:
+            command.extend(['-ss', str(self.seek)])
+
+        command.extend([
             '-i', self.path,
             '-f', 'rawvideo',
             '-r', str(self.frame_rate),
             '-pix_fmt', 'rgb24',
             '-vf', 'scale=%d:%d' % (width, height),
             '-',
-        ]
+        ])
         frame_size = 3 * width * height
         self.process = subprocess.Popen(
             args=command,
@@ -92,13 +98,21 @@ class VideoLoader:
         return self
 
     def __exit__(self, *args):
-        returncode = self.process.wait(timeout=3)
-        if returncode != 0:
-            _LG.error(
-                'Key frame decoding process (ffmpeg) did not '
-                'complete correctly. Return code: %s', returncode
-            )
-        self.process = None
+        if self.process is not None:
+            returncode = self.process.wait(timeout=3)
+            if returncode != 0:
+                _LG.error(
+                    'Key frame decoding process (ffmpeg) did not '
+                    'complete correctly. Return code: %s', returncode
+                )
+            self.process = None
+
+    def terminate(self):
+        """Terminate process"""
+        if self.process is not None:
+            self.process.terminate()
+            _LG.debug('Terminated process')
+            self.process = None
 
     def __iter__(self):
         width, height = self.scale
