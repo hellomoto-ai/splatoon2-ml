@@ -53,6 +53,7 @@ class Trainer:
             initial_beta=10.0,
             beta_step=0.1,
             target_kld=0.1,
+            samples=None,
     ):
         self.model = model.float().to(device)
         self.train_loader = train_loader
@@ -64,6 +65,8 @@ class Trainer:
         self.beta = initial_beta
         self.beta_step = beta_step
         self.target_kld = target_kld
+
+        self.samples = samples
 
         fields = [
             'PHASE', 'TIME', 'STEP', 'EPOCH', 'KLD', 'BETA', 'F_RECON',
@@ -216,22 +219,15 @@ class Trainer:
         loss.update(loss_gan)
         return recon, loss, stats
 
-    def train(self):
+    def train_batch(self, batch):
         self.model.train()
-        _LG.info('         %s', loss_utils.format_loss_header())
-        for i, batch in enumerate(self.train_loader):
-            orig = batch['image'].float().to(self.device)
-            _, loss, stats = self._forward(orig, update=True)
-            self.step += 1
-            self._write('train', loss, stats)
-            if i % 30 == 0:
-                progress = 100. * i / len(self.train_loader)
-                _LG.info(
-                    '  %3d %%: %s',
-                    progress, loss_utils.format_loss_dict(loss))
-        self.epoch += 1
+        orig = batch['image'].float().to(self.device)
+        _, loss, stats = self._forward(orig, update=True)
+        self._write('train', loss, stats)
+        return loss
 
     def test(self):
+        _LG.info('Epoch %3d (%8d): Test', self.epoch, self.step)
         with torch.no_grad():
             self._test()
 
@@ -251,7 +247,9 @@ class Trainer:
         self._write('test', loss_tracker, stats)
         _LG.info('         %s', loss_utils.format_loss_dict(loss_tracker))
 
-    def generate(self, samples):
+    def generate(self, samples=None):
+        _LG.info('Epoch %3d (%8d): Sample Generation', self.epoch, self.step)
+        samples = self.samples if samples is None else samples
         with torch.no_grad():
             self._generate(samples)
 
@@ -261,6 +259,25 @@ class Trainer:
         for i, recon in enumerate(recons):
             path = 'sample_%d.png' % i
             _save_images([recon], path, self.step, self.output_dir)
+
+    def train_one_epoch(self, report_every=180, test_interval=1000):
+        _LG.info('Epoch %3d: Training', self.epoch)
+        _LG.info('         %s', loss_utils.format_loss_header())
+        last_report = 0
+        for i, batch in enumerate(self.train_loader):
+            loss = self.train_batch(batch)
+            self.step += 1
+            if time.time() - last_report > report_every:
+                progress = 100. * i / len(self.train_loader)
+                _LG.info(
+                    '  %3d %%: %s',
+                    progress, loss_utils.format_loss_dict(loss))
+                last_report = time.time()
+            if self.step % test_interval == 0:
+                self.test()
+                self.generate()
+                _LG.info('         %s', loss_utils.format_loss_header())
+        self.epoch += 1
 
     def __repr__(self):
         opt = '\n'.join([

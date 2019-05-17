@@ -94,33 +94,24 @@ def _get_trainer(args):
         'decoder': opt(model.vae.decoder.parameters(), lr=args.lr),
         'discriminator': opt(model.discriminator.parameters(), lr=args.lr),
     }
+    samples = _get_samples(n_latent, device)
     trainer = sp_vae_gan.trainer.Trainer(
         model, optimizers, train_loader, test_loader, device, args.output_dir,
+        samples=samples,
     )
     if args.checkpoint:
         trainer.load(args.checkpoint)
-    samples = _get_samples(n_latent, device)
-    return trainer, samples
+    return trainer
 
 
 def _run_main(args):
-    trainer, samples = _get_trainer(args)
+    trainer = _get_trainer(args)
     _LG.info('\n%s', trainer)
     _LG.info('Batch size: %s', args.batch_size)
-    _LG.info('Epoch: %d - Sample Generation', trainer.epoch)
-    trainer.generate(samples)
-    _LG.info('Epoch: %d - Test', trainer.epoch)
     trainer.test()
+    trainer.generate()
     for _ in range(args.epoch):
-        _LG.info('Epoch: %d - Training', trainer.epoch)
-        try:
-            trainer.train()
-        finally:
-            trainer.save()
-        _LG.info('Epoch: %d - Sample Generation', trainer.epoch)
-        trainer.generate(samples)
-        _LG.info('Epoch: %d - Test', trainer.epoch)
-        trainer.test()
+        trainer.train_one_epoch()
 
 
 def _main():
