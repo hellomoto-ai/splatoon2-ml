@@ -10,6 +10,7 @@ from sp_vae_gan import (
     image_util,
     misc_utils,
     loss_utils,
+    saved_model_manager,
 )
 
 _LG = logging.getLogger(__name__)
@@ -68,6 +69,8 @@ class Trainer:
 
         self.samples = samples
 
+        self.saved_model_manager = saved_model_manager.SavedModelManager()
+
         fields = [
             'PHASE', 'TIME', 'STEP', 'EPOCH', 'KLD', 'BETA', 'F_RECON',
             'G_RECON', 'G_FAKE', 'D_REAL', 'D_RECON', 'D_FAKE', 'PIXEL',
@@ -107,6 +110,12 @@ class Trainer:
             'epoch': self.epoch,
             'step': self.step,
         }, output)
+        return output
+
+    def manage_saved(self, path, loss):
+        path = self.saved_model_manager.update(path, loss)
+        if path:
+            os.remove(path)
 
     def load(self, checkpoint):
         _LG.info('Loading checkpoint from %s', checkpoint)
@@ -229,7 +238,7 @@ class Trainer:
     def test(self):
         _LG.info('Epoch %3d (%8d): Test', self.epoch, self.step)
         with torch.no_grad():
-            self._test()
+            return self._test()
 
     def _test(self):
         self.model.eval()
@@ -244,8 +253,9 @@ class Trainer:
                 _save_images(
                     (orig[0], recon[0]), path[0],
                     self.step, self.output_dir)
-        self._write('test', loss_tracker, stats)
+        self._write('test', loss_tracker, stats_tracker)
         _LG.info('         %s', loss_utils.format_loss_dict(loss_tracker))
+        return loss_tracker
 
     def generate(self, samples=None):
         _LG.info('Epoch %3d (%8d): Sample Generation', self.epoch, self.step)
@@ -274,8 +284,10 @@ class Trainer:
                     progress, loss_utils.format_loss_dict(loss))
                 last_report = time.time()
             if self.step % test_interval == 0:
-                self.test()
                 self.generate()
+                loss = self.test()
+                path = self.save()
+                self.manage_saved(path, loss['pixel'])
                 _LG.info('         %s', loss_utils.format_loss_header())
         self.epoch += 1
 
