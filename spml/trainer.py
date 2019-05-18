@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from sp_vae_gan import (
+from spml import (
     image_util,
     misc_utils,
     loss_utils,

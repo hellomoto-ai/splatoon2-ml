@@ -8,9 +8,9 @@ import argparse
 import torch
 import numpy as np
 
-import sp_vae_gan.dataloader
-import sp_vae_gan.models.vae_gan
-import sp_vae_gan.trainer
+import spml.dataloader
+import spml.models.vae_gan
+import spml.trainer
 
 
 _LG = logging.getLogger(__name__)
@@ -78,16 +78,16 @@ def _get_trainer(args):
     # where f(x) = 2x - 1
     scale = (121, 65)
     n_latent = 1024
-    train_loader = sp_vae_gan.dataloader.get_dataloader(
+    train_loader = spml.dataloader.get_dataloader(
         args.train_flist, args.data_dir, args.batch_size, scale)
     # To output the same image over epochs to observe evolution of model,
     # disable shuffle and fix batch_size to 16 (unless smaller value is
     # provided via command line when batch does not fit on GPU memory)
-    test_loader = sp_vae_gan.dataloader.get_dataloader(
+    test_loader = spml.dataloader.get_dataloader(
         args.test_flist, args.data_dir,
         min(16, args.batch_size), scale, shuffle=False,
     )
-    model = sp_vae_gan.models.vae_gan.get_model(n_latent)
+    model = spml.models.vae_gan.get_model(n_latent)
     opt = torch.optim.Adam
     optimizers = {
         'encoder': opt(model.vae.encoder.parameters(), lr=args.lr),
@@ -95,7 +95,7 @@ def _get_trainer(args):
         'discriminator': opt(model.discriminator.parameters(), lr=args.lr),
     }
     samples = _get_samples(n_latent, device)
-    trainer = sp_vae_gan.trainer.Trainer(
+    trainer = spml.trainer.Trainer(
         model, optimizers, train_loader, test_loader, device, args.output_dir,
         samples=samples,
     )

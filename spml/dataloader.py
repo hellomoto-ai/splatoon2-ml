@@ -4,7 +4,7 @@ import logging
 import numpy as np
 import torch.utils.data
 
-from sp_vae_gan import image_util
+from spml import image_util
 
 _LG = logging.getLogger(__name__)
 
