@@ -1,3 +1,4 @@
+import os
 import csv
 import collections
 
@@ -34,3 +35,8 @@ class CSVWriter:
     def write(self, **kwargs):
         self.writer.writerow(kwargs)
         self.fileobj.flush()
+
+
+def ensure_dir(filepath):
+    dirpath = os.path.dirname(filepath)
+    os.makedirs(dirpath, exist_ok=True)

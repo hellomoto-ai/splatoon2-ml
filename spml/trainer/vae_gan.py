@@ -1,3 +1,4 @@
+"""Training mechanism for VAE-GAN"""
 import os
 import time
 import logging
@@ -8,32 +9,51 @@ import torch.nn.functional as F
 
 from spml import (
     image_util,
-    misc_utils,
     loss_utils,
+)
+from . import (
+    misc_utils,
     saved_model_manager,
 )
 
 _LG = logging.getLogger(__name__)
 
 
-def _ensure_dir(filepath):
-    dirpath = os.path.dirname(filepath)
-    os.makedirs(dirpath, exist_ok=True)
-
-
 def _save_images(images, src_path, step, output_dir):
     src_name = os.path.splitext(os.path.basename(src_path))[0]
     save_path = os.path.join(
         output_dir, 'images', src_name, 'step_%d.png' % step)
-    _ensure_dir(save_path)
+    misc_utils.ensure_dir(save_path)
 
-    images = [img.detach().to('cpu').numpy() for img in images]
+    images = [img.detach().cpu().numpy() for img in images]
     images = np.concatenate(images, axis=1)
     image_util.save_image(images, save_path)
 
 
-def _fetch_numpy(variable):
-    return variable.cpu().detach().numpy()
+def _log_header():
+    fields = ' '.join(['%10s'] * 9) % (
+        'KLD', 'BETA', 'F_RECON',
+        'G_RECON', 'G_FAKE', 'D_REAL', 'D_RECON', 'D_FAKE', '[PIXEL]',
+    )
+    _LG.info('%5s %5s: %s', '', 'PHASE', fields)
+
+
+_LOGGED = {'last': 0}
+
+
+def _log_loss(loss, phase, progress=None):
+    if _LOGGED['last'] % 30 == 0:
+        _log_header()
+    _LOGGED['last'] += 1
+
+    header = '' if progress is None else '%3d %%' % progress
+    fields = ' '.join(['%10.2e'] * 9) % (
+        loss['kld'], loss['beta'], loss['feats_recon'],
+        loss['gen_recon'], loss['gen_fake'],
+        loss['disc_orig'], loss['disc_recon'], loss['disc_fake'],
+        loss['pixel'],
+    )
+    _LG.info('%5s %5s: %s', header, phase, fields)
 
 
 def _get_latent_stats(z):
@@ -100,7 +120,7 @@ class Trainer:
         output = os.path.join(self.output_dir, 'checkpoints', filename)
 
         _LG.info('Saving checkpoint at %s', output)
-        _ensure_dir(output)
+        misc_utils.ensure_dir(output)
         torch.save({
             'model': self.model.state_dict(),
             'optimizers': {
@@ -236,7 +256,6 @@ class Trainer:
         return loss
 
     def test(self):
-        _LG.info('Epoch %3d (%8d): Test', self.epoch, self.step)
         with torch.no_grad():
             return self._test()
 
@@ -254,11 +273,10 @@ class Trainer:
                     (orig[0], recon[0]), path[0],
                     self.step, self.output_dir)
         self._write('test', loss_tracker, stats_tracker)
-        _LG.info('         %s', loss_utils.format_loss_dict(loss_tracker))
+        _log_loss(loss_tracker, phase='Test')
         return loss_tracker
 
     def generate(self, samples=None):
-        _LG.info('Epoch %3d (%8d): Sample Generation', self.epoch, self.step)
         samples = self.samples if samples is None else samples
         with torch.no_grad():
             self._generate(samples)
@@ -271,24 +289,19 @@ class Trainer:
             _save_images([recon], path, self.step, self.output_dir)
 
     def train_one_epoch(self, report_every=180, test_interval=1000):
-        _LG.info('Epoch %3d: Training', self.epoch)
-        _LG.info('         %s', loss_utils.format_loss_header())
         last_report = 0
         for i, batch in enumerate(self.train_loader):
             loss = self.train_batch(batch)
             self.step += 1
             if time.time() - last_report > report_every:
                 progress = 100. * i / len(self.train_loader)
-                _LG.info(
-                    '  %3d %%: %s',
-                    progress, loss_utils.format_loss_dict(loss))
+                _log_loss(loss, 'Train', progress)
                 last_report = time.time()
             if self.step % test_interval == 0:
                 self.generate()
                 loss = self.test()
                 path = self.save()
                 self.manage_saved(path, loss['pixel'])
-                _LG.info('         %s', loss_utils.format_loss_header())
         self.epoch += 1
 
     def __repr__(self):
