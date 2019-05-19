@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """Train VAE-GAN."""
 import os
-import csv
 import sys
 import logging
 import argparse
@@ -11,7 +10,7 @@ import numpy as np
 
 import spml.dataloader
 import spml.models.vae_gan
-import spml.trainer
+import spml.trainer.vae_gan
 
 
 _LG = logging.getLogger(__name__)
@@ -109,7 +108,7 @@ def _get_trainer(args):
         'discriminator': opt(model.discriminator.parameters(), lr=args.lr),
     }
     samples = _get_samples(n_latent, device)
-    trainer = spml.trainer.Trainer(
+    trainer = spml.trainer.vae_gan.Trainer(
         model, optimizers, train_loader, test_loader, device, args.output_dir,
         samples=samples,
     )
