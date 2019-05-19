@@ -58,7 +58,7 @@ def _main():
     _LG.info('Loading model from %s', args.model)
     model = _load_model(args.model).float()
     _LG.info('Openinig video %s', args.video)
-    frame_generator = sp_vae_gan.dataloader.VideoDataset(
+    frame_generator = sp_vae_gan.dataloader.VideoSlicer(
         args.video, frame_rate=30, frame_dim=(121, 65), debug=args.debug)
     with tempfile.NamedTemporaryFile('wb', suffix='.mp4') as tmp:
         saver = image_util.VideoSaver(tmp.name, (242, 64), debug=args.debug)

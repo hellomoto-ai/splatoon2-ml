@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Train VAE-GAN."""
 import os
+import csv
 import sys
 import logging
 import argparse
@@ -67,6 +68,18 @@ def _get_samples(num_features, device, batch_size=32, seed=0):
     return torch.tensor(samples, device=device).float().to(device)
 
 
+def _load_keyframe_flist(flist):
+    ret = []
+    with open(flist, 'r') as fileobj:
+        for line in fileobj:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            path, _ = line.split('\t')
+            ret.append(path)
+    return ret
+
+
 def _get_trainer(args):
     device = torch.device(
         'cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
@@ -79,12 +92,13 @@ def _get_trainer(args):
     scale = (121, 65)
     n_latent = 1024
     train_loader = spml.dataloader.get_dataloader(
-        args.train_flist, args.data_dir, args.batch_size, scale)
+        _load_keyframe_flist(args.train_flist), args.data_dir,
+        args.batch_size, scale)
     # To output the same image over epochs to observe evolution of model,
     # disable shuffle and fix batch_size to 16 (unless smaller value is
     # provided via command line when batch does not fit on GPU memory)
     test_loader = spml.dataloader.get_dataloader(
-        args.test_flist, args.data_dir,
+        _load_keyframe_flist(args.test_flist), args.data_dir,
         min(16, args.batch_size), scale, shuffle=False,
     )
     model = spml.models.vae_gan.get_model(n_latent)

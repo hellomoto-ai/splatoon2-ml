@@ -107,11 +107,11 @@ class VideoLoader:
                 )
             self.process = None
 
-    def terminate(self):
-        """Terminate process"""
+    def kill(self):
+        """Kill process"""
         if self.process is not None:
-            self.process.terminate()
-            _LG.debug('Terminated process')
+            self.process.kill()
+            _LG.debug('Killed process')
             self.process = None
 
     def __iter__(self):
@@ -127,7 +127,7 @@ class VideoLoader:
             frame = frame.reshape(shape).transpose(2, 0, 1)
             yield frame
             n_yield += 1
-        _LG.info('Finished key frame extraction: %d extracted.', n_yield)
+        _LG.debug('Finished key frame extraction: %d extracted.', n_yield)
 
 
 class VideoSaver:

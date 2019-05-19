@@ -9,26 +9,13 @@ from spml import image_util
 _LG = logging.getLogger(__name__)
 
 
-def _load_frames(flist, root_dir):
-    ret = []
-    with open(flist, 'r') as fileobj:
-        for line in fileobj:
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-            path, class_ = line.split('\t')
-            ret.append((os.path.join(root_dir, path), int(class_)))
-    return ret
-
-
 class Dataset(torch.utils.data.Dataset):
     """Image dataset.
 
     Parameters
     ----------
     flist : str
-        Path to a file which contains the list image paths, relative to
-        `root_dir`
+        list image paths, relative to root_dir`
 
     root_dir : str
         Path to the directory where image files are located.
@@ -39,16 +26,16 @@ class Dataset(torch.utils.data.Dataset):
     def __init__(self, flist, root_dir, scale):
         self.flist = flist
         self.root_dir = root_dir
-        self.frames = _load_frames(flist, root_dir)
         self.scale = scale
 
     def __len__(self):
-        return len(self.frames)
+        return len(self.flist)
 
     def __getitem__(self, idx):
-        path, class_ = self.frames[idx]
-        image = image_util.load_image(path, self.scale)
-        return {'image': image, 'class': class_, 'path': path}
+        path = self.flist[idx]
+        full_path = os.path.join(self.root_dir, path)
+        image = image_util.load_image(full_path, self.scale)
+        return {'image': image, 'path': path}
 
 
 def _encode(buffer_):
@@ -56,8 +43,8 @@ def _encode(buffer_):
     return torch.from_numpy(batch)
 
 
-class VideoDataset(torch.utils.data.Dataset):
-    """Extract frames from video"""
+class VideoSlicer:
+    """Extract frames from a single video"""
     def __init__(
             self, input_file, batch_size=32,
             frame_rate=30, frame_dim=(121, 65), debug=False):
@@ -82,6 +69,65 @@ class VideoDataset(torch.utils.data.Dataset):
                     buffer_ = []
             if buffer_:
                 yield _encode(buffer_)
+
+
+class MultiVideoDataLoader:
+    """Extract frames from multiple videos
+
+    Parameters
+    ----------
+    flist : list of dict
+        `path` and `duration` key is expected.
+
+    root_dir : str
+
+    frame_rate : int
+    """
+    def __init__(
+            self, flist, root_dir, batch_size=64,
+            frame_dim=(121, 65), frame_rate=30,
+            randomize=True, random_seed=None, debug=False):
+        self.flist = flist
+        self.root_dir = root_dir
+        self.batch_size = batch_size
+        self.frame_rate = frame_rate
+        self.frame_width, self.frame_height = frame_dim
+        self.randomize = randomize
+        self._rng = np.random.RandomState(random_seed)
+        self.debug = debug
+
+    def __len__(self):
+        return len(self.flist)
+
+    def __iter__(self):
+        if self.randomize:
+            self._rng.shuffle(self.flist)
+
+        for item in self.flist:
+            yield from self._iter_item(item)
+
+    def _iter_item(self, item):
+        path, duration = item['path'], item['duration']
+        path = os.path.join(self.root_dir, path)
+
+        start = max(0, self._rng.random_sample() * (duration - 5))
+        loader = image_util.VideoLoader(
+            path=path, seek=start,
+            scale=(self.frame_width, self.frame_height),
+            frame_rate=self.frame_rate, debug=self.debug
+        )
+        buffer_ = []
+        with loader:
+            for frame in loader:
+                buffer_.append(frame)
+                if len(buffer_) >= self.batch_size:
+                    break
+            loader.kill()
+        if not buffer_:
+            _LG.warning('No frame was decoded from %s', item['path'])
+            return
+        frames = _encode(buffer_)
+        yield {'frames': frames, 'path': item['path'], 'start': start}
 
 
 def get_dataloader(flist, data_dir, batch_size, scale, shuffle=True):
