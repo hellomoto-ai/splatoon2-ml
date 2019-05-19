@@ -7,10 +7,12 @@ class EncoderBlock(nn.Sequential):
     def __init__(self, in_channels, out_channels):
         super().__init__(
             nn.ReflectionPad2d(2),
-            nn.Conv2d(
-                in_channels=in_channels, out_channels=out_channels,
-                kernel_size=5, stride=2, bias=False),
-            nn.BatchNorm2d(num_features=out_channels),
+            torch.nn.utils.spectral_norm(
+                nn.Conv2d(
+                    in_channels=in_channels, out_channels=out_channels,
+                    kernel_size=5, stride=2, bias=False),
+            ),
+            # nn.BatchNorm2d(num_features=out_channels),
             nn.ReLU(),
         )
 
@@ -90,9 +92,11 @@ class DiscriminatorBlock(nn.Sequential):
     def __init__(self, in_channels, out_channels, kernel_size=5, stride=2):
         super().__init__(
             nn.ReflectionPad2d(2),
-            nn.Conv2d(
-                in_channels=in_channels, out_channels=out_channels,
-                kernel_size=kernel_size, stride=stride, bias=True),
+            torch.nn.utils.spectral_norm(
+                nn.Conv2d(
+                    in_channels=in_channels, out_channels=out_channels,
+                    kernel_size=kernel_size, stride=stride, bias=True),
+            ),
         )
 
 
@@ -108,9 +112,13 @@ class Discriminator(nn.Module):
         )
         n_feat = self.feat_size[0] * self.feat_size[1] * 256
         self.fc = nn.Sequential(
-            nn.Linear(in_features=n_feat, out_features=512),
-            nn.ReLU(),
-            nn.Linear(in_features=512, out_features=1),
+            torch.nn.utils.spectral_norm(
+                nn.Linear(in_features=n_feat, out_features=512),
+            ),
+            nn.LeakyReLU(),
+            torch.nn.utils.spectral_norm(
+                nn.Linear(in_features=512, out_features=1),
+            ),
             nn.Sigmoid()
         )
 
