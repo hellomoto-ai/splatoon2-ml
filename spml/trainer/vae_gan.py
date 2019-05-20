@@ -71,7 +71,7 @@ class Trainer:
             self, model, optimizers,
             train_loader, test_loader,
             device, output_dir,
-            initial_beta=10.0,
+            initial_beta=1.0,
             beta_step=0.01,
             target_kld=0.1,
             samples=None,
