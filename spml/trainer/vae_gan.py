@@ -102,6 +102,8 @@ class Trainer:
         self.step = 0
         self.epoch = 0
 
+        self.latent_stats = loss_utils.MovingStats()
+
     def _write(self, phase, loss, stats):
         self.writer.write(
             PHASE=phase, STEP=self.step, EPOCH=self.epoch, TIME=time.time(),
@@ -211,8 +213,11 @@ class Trainer:
             self.optimizers['decoder'].step()
 
         # KLD
-        latent = self.model.vae.encoder(orig)
-        kld = torch.mean(loss_utils.kld_loss(*latent))
+        z_mean, z_logvar = self.model.vae.encoder(orig)
+        z_std = torch.exp(0.5 * z_logvar)
+        latent = z_mean + z_std * torch.randn_like(z_std)
+        latent_stats = self.latent_stats(latent, update=update)
+        kld = torch.mean(loss_utils.kld_loss(*latent_stats))
         if update:
             beta_latent_loss = self.beta * kld
             self.model.zero_grad()
