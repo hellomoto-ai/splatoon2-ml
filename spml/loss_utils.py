@@ -23,7 +23,7 @@ class MovingStats:
         x_var = torch.var(x, dim=0)
 
         mean = self.momentum * self.mean + (1 - self.momentum) * x_mean
-        var = self.momentum * self.var + (1 - self.var) * x_var
+        var = self.momentum * self.var + (1 - self.momentum) * x_var
 
         if update:
             self.mean = mean.detach()
