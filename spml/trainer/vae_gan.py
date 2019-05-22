@@ -79,6 +79,7 @@ class Trainer:
             initial_beta=1.0,
             beta_step=0.01,
             target_kld=0.1,
+            beta_momentum=0.9,
             samples=None,
     ):
         self.model = model.float().to(device)
@@ -91,6 +92,7 @@ class Trainer:
         self.beta = initial_beta
         self.beta_step = beta_step
         self.target_kld = target_kld
+        self.beta_momentum = beta_momentum
 
         self.samples = samples
 
@@ -108,7 +110,7 @@ class Trainer:
         self.step = 0
         self.epoch = 0
 
-        self.latent_stats = loss_utils.MovingStats()
+        self.latent_stats = loss_utils.MovingStats(beta_momentum)
 
     def _write(self, phase, loss, stats):
         self.writer.write(
@@ -325,7 +327,7 @@ class Trainer:
             'Beta: %s' % self.beta,
             'Beta Step: %s' % self.beta_step,
             'Target KLD: %s' % self.target_kld,
-            'KLD Stats Momentum: %s' % self.latent_stats.momentum,
+            'KLD Stats Momentum: %s' % self.beta_momentum,
         ])
         return 'Epoch: %d\nStep: %d\nModel: %s\nOptimizers: %s\n%s\n' % (
             self.epoch, self.step, self.model, opt, beta
