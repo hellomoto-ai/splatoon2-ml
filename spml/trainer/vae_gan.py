@@ -56,13 +56,18 @@ def _log_loss(loss, phase, progress=None):
     _LG.info('%5s %5s: %s', header, phase, fields)
 
 
-def _get_latent_stats(z):
+def _get_latent_stats(z, z_std):
     z = z.detach().cpu().numpy()
+    z_std = z_std.detach().cpu().numpy()
     return {
         'z_mean': np.mean(z),
         'z_min': np.min(z),
         'z_max': np.max(z),
         'z_var': np.var(z),
+        'z_std_mean': np.mean(z_std),
+        'z_std_min': np.min(z_std),
+        'z_std_max': np.max(z_std),
+        'z_std_var': np.var(z_std),
     }
 
 
@@ -95,6 +100,7 @@ class Trainer:
             'PHASE', 'TIME', 'STEP', 'EPOCH', 'KLD', 'BETA', 'F_RECON',
             'G_RECON', 'G_FAKE', 'D_REAL', 'D_RECON', 'D_FAKE', 'PIXEL',
             'Z_MEAN', 'Z_MIN', 'Z_MAX', 'Z_VAR',
+            'Z_STD_MEAN', 'Z_STD_MIN', 'Z_STD_MAX', 'Z_STD_VAR',
         ]
         logfile = open(os.path.join(output_dir, 'result.csv'), 'w')
         self.writer = misc_utils.CSVWriter(fields, logfile)
@@ -115,6 +121,8 @@ class Trainer:
             PIXEL=loss['pixel'],
             Z_MEAN=stats['z_mean'], Z_VAR=stats['z_var'],
             Z_MIN=stats['z_min'], Z_MAX=stats['z_max'],
+            Z_STD_MEAN=stats['z_std_mean'], Z_STD_VAR=stats['z_std_var'],
+            Z_STD_MIN=stats['z_std_min'], Z_STD_MAX=stats['z_std_max'],
         )
 
     def save(self):
@@ -235,7 +243,7 @@ class Trainer:
             'beta': self.beta,
             'feats_recon': feats_loss.item(),
         }
-        stats = _get_latent_stats(latent[0])
+        stats = _get_latent_stats(latent, z_std)
         return recon, loss, stats
 
     def _get_pixel_loss(self, orig):
@@ -317,7 +325,8 @@ class Trainer:
             'Beta: %s' % self.beta,
             'Beta Step: %s' % self.beta_step,
             'Target KLD: %s' % self.target_kld,
+            'KLD Stats Momentum: %s' % self.latent_stats.momentum,
         ])
-        return 'Epoch: %d\nStep: %d\nModel: %s\nOptimizers: %s\nBeta: %s\n' % (
+        return 'Epoch: %d\nStep: %d\nModel: %s\nOptimizers: %s\n%s\n' % (
             self.epoch, self.step, self.model, opt, beta
         )
