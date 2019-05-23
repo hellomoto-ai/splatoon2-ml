@@ -2,8 +2,8 @@ import torch
 import torch.nn.functional as F
 
 
-def kld_loss(mean, var):
-    logvar = torch.log(var.clamp_(min=1e-12))
+def kld_loss(mean, logvar):
+    var = torch.exp(logvar)
     return - 0.5 * (1 + logvar - mean.pow(2) - var)
 
 

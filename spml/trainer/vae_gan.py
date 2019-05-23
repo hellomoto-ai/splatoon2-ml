@@ -79,7 +79,6 @@ class Trainer:
             initial_beta=1.0,
             beta_step=0.01,
             target_kld=0.1,
-            beta_momentum=0.1,
             samples=None,
     ):
         self.model = model.float().to(device)
@@ -92,7 +91,6 @@ class Trainer:
         self.beta = initial_beta
         self.beta_step = beta_step
         self.target_kld = target_kld
-        self.beta_momentum = beta_momentum
 
         self.samples = samples
 
@@ -109,8 +107,6 @@ class Trainer:
 
         self.step = 0
         self.epoch = 0
-
-        self.latent_stats = loss_utils.MovingStats(beta_momentum)
 
     def _write(self, phase, loss, stats):
         self.writer.write(
@@ -224,10 +220,8 @@ class Trainer:
 
         # KLD
         z_mean, z_logvar = self.model.vae.encoder(orig)
-        z_std = torch.exp(0.5 * z_logvar)
-        latent = z_mean + z_std * torch.randn_like(z_std)
-        latent_stats = self.latent_stats(latent, update=update)
-        kld = torch.mean(loss_utils.kld_loss(*latent_stats))
+        z_std = torch.exp(0.5 * z_logvar)  # for stats recording
+        kld = torch.mean(loss_utils.kld_loss(z_mean, z_logvar))
         if update:
             beta_latent_loss = self.beta * kld
             self.model.zero_grad()
@@ -245,7 +239,7 @@ class Trainer:
             'beta': self.beta,
             'feats_recon': feats_loss.item(),
         }
-        stats = _get_latent_stats(latent, z_std)
+        stats = _get_latent_stats(z_mean, z_std)
         return recon, loss, stats
 
     def _get_pixel_loss(self, orig):
@@ -327,7 +321,6 @@ class Trainer:
             'Beta: %s' % self.beta,
             'Beta Step: %s' % self.beta_step,
             'Target KLD: %s' % self.target_kld,
-            'KLD Stats Momentum: %s' % self.beta_momentum,
         ])
         return 'Epoch: %d\nStep: %d\nModel: %s\nOptimizers: %s\n%s\n' % (
             self.epoch, self.step, self.model, opt, beta

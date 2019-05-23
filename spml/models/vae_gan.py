@@ -43,7 +43,7 @@ class Encoder(nn.Module):
         x = x.view(x.size()[0], -1)
         z = self.map(x)
         z_mean, z_logvar = z[:, :self.num_latent], z[:, self.num_latent:]
-        z_logvar.clamp_(max=20)  # For numerical stability
+        z_logvar = z_logvar.clamp(max=20)  # For numerical stability
         return z_mean, z_logvar
 
 
