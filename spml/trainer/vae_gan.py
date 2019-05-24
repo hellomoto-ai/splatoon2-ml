@@ -79,6 +79,7 @@ class Trainer:
             initial_beta=10.0,
             beta_step=0.1,
             target_kld=0.1,
+            beta_momentum=0.9,
             samples=None,
     ):
         self.model = model.float().to(device)
@@ -91,6 +92,7 @@ class Trainer:
         self.beta = initial_beta
         self.beta_step = beta_step
         self.target_kld = target_kld
+        self.beta_momentum = beta_momentum
 
         self.samples = samples
 
@@ -107,6 +109,8 @@ class Trainer:
 
         self.step = 0
         self.epoch = 0
+
+        self.latent_stats = loss_utils.MovingStats(beta_momentum)
 
     def _write(self, phase, loss, stats):
         self.writer.write(
@@ -219,8 +223,9 @@ class Trainer:
             self.optimizers['decoder'].step()
 
         # KLD
-        _, latent = self.model.vae.encoder(orig)
-        kld = torch.mean(loss_utils.kld_loss(*latent))
+        sample, latent = self.model.vae.encoder(orig)
+        latent_stats = self.latent_stats(sample, update)
+        kld = torch.mean(loss_utils.kld_loss(*latent_stats))
         if update:
             beta_latent_loss = self.beta * kld
             self.model.zero_grad()
@@ -320,6 +325,7 @@ class Trainer:
             'Beta: %s' % self.beta,
             'Beta Step: %s' % self.beta_step,
             'Target KLD: %s' % self.target_kld,
+            'Beta Momuntum: %s' % self.beta_momentum,
         ])
         return 'Epoch: %d\nStep: %d\nModel: %s\nOptimizers: %s\n%s\n' % (
             self.epoch, self.step, self.model, opt, beta
