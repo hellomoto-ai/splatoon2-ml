@@ -1,0 +1,150 @@
+---
+layout: post
+title:  "VAE-GAN Part7: Batch KLD"
+date:   2019-06-06 00:00:00 +0000
+categories: vae-gan
+mathjax: true
+---
+
+<p>
+    In <a href="{{ site.baseurl }}/vae-gan/2019/05/30/vae-gan-pt6">the previous post</a>, I hypothesised that the explosion of KL-Divergence occurs when optimizing feature matching because the output from feature extraction part of discriminator is not regulated and the values of gradient can become large. Then I thought simply adding Batch Normalization at the end of feature extraction would do. It, however, did not. With Batch Normalization, feature matching error is regulated, but is no longer giving a good gradient back to encoder/decoder (it seems).
+</p>
+
+<p>
+    While I was looking for a way to surpress the explostion of feature matching error, so that KL-Divergence behaves better, I also came to wonder if <a href="{{ site.baseurl }}/vae-gan/2019/05/23/vae-gan-with-adaptive-beta/">KLD on batch</a> can help. To investigate this, I ran couple of experiments.
+</P>
+
+<h2>Batch KLD</h2>
+
+<p>
+    Firstly, in addition to the previous definition of Batch KLD, I incorperated moving average.
+</p>
+
+{% highlight python %}
+# Get mu and logvar from encoder
+z_mu, z_logvar = encoder(input_image)
+
+# Generate latent sample
+z_std = torch.exp(0.5 * z_logvar)
+sample = z_mu + z_std *torch.randn_like(z_std)
+
+# Compuet mean and variance of samples over batch
+sample_mean = torch.mean(sample, dim=0)
+sample_var = torch.var(sample, dim=0)
+
+# Apply moving average
+mean = momentum * current_mean + (1 - momentum) * sample_mean
+var = momentum * current_var + (1 - momentum) * sample_var
+
+# Cache moving stats
+current_mean = mean.detach()
+current_var = var.detach()
+
+# Compute KLD
+logvar = torch.log(var.clamp(min=1e-12))
+kld = - 0.5 * (1 + logvar - mean.pow(2) - var)
+{% endhighlight  %}
+
+<p>
+In cotrast the typical KLD computation (referred as Single Point KLD hereafter) is as follow;
+</p>
+
+{% highlight python %}
+
+mu, logvar = encoder(input_image)
+var = logvar.exp()
+kld = - 0.5 * (1 + logvar - mu.pow(2) - var)
+
+{% endhighlight %}
+
+<h2>Experiment 1</h2>
+
+<p>
+    I ran two sets of experiments with different parameter set. In the first experiment, the parameters for adjustment of $\beta$ are as following, which is same as <a href="{{ site.baseurl }}/vae-gan/2019/05/30/vae-gan-pt6">the previous post</a>.
+</p>
+
+{% highlight python %}
+beta_step = 0.1
+initial_beta = 10.0
+{% endhighlight %}
+
+<p>
+in this experiment, I changed how KLD is computed. <a href="https://github.com/hellomoto-ai/splatoon2-ml/tree/c1c26d9">Single Point KLD</a>, Batch KLD with <a href="https://github.com/hellomoto-ai/splatoon2-ml/tree/cfe6e46">momentum 0.9</a>, <a href="https://github.com/hellomoto-ai/splatoon2-ml/tree/4bd24ee">momentum 0.1</a> and <a href="https://github.com/hellomoto-ai/splatoon2-ml/tree/48e028f">momentum 0.0</a>.
+</p>
+
+<h3>Observations</h3>
+
+<ol>
+  <li>The reconstruction error improved with batch KLD constraint.</li>
+  <div align="center">
+      <img src="{{ site.baseurl }}/assets/2019-06-06/exp1/pixel.svg">
+  </div>
+  <li>When momentum value for Batch KLD is small, the value of KLD for test cases deviate from target KLD.</li>
+  <div align="center">
+      <img src="{{ site.baseurl }}/assets/2019-06-06/exp1/kld.svg">
+  </div>
+  <li>The feature matching error values have become lower with batch KLD.</li>
+  <div align="center">
+      <img src="{{ site.baseurl }}/assets/2019-06-06/exp1/feats.svg">
+  </div>
+  <li>$\beta$ grows larger in Single Point KLD and batch KLD with momentum=0.9.</li>
+  <div align="center">
+      <img src="{{ site.baseurl }}/assets/2019-06-06/exp1/beta.svg">
+  </div>
+</ol>
+
+<p>
+    In addition to the above, I recorded some statistics of decoder output, Z_MEAN and Z_STDDEV. For Z_MEAN, Batch KLD has a broader skirt than Single Point KLD. For Single Point KLD, the value of standard deviation of latent points (Z_STDDEV) is distributed near 1.0, but not that does not happend for Batch KLD. This is expected as, in Batch KLD, the whole distribution of latent samples are optimized towards normal distribution. However, the value of Z_STDDEVs are too small and it is virtually making no difference when sampling from the latent distribution. 
+</p>
+
+<div align="center">
+    <img src="{{ site.baseurl }}/assets/2019-06-06/exp1/latent.svg">
+</div>
+
+<h2>Experiment 2</h2>
+
+<p>
+    For the second set of experiments, the parameters for adjustment of $\beta$ are as following;
+</p>
+
+{% highlight python %}
+beta_step = 0.01
+initial_beta = 1.0
+{% endhighlight %}
+
+<p>
+  I changed KLD computation in the same manner as exp 1; <a href="https://github.com/hellomoto-ai/splatoon2-ml/tree/2e5d3bf">Single Point KLD</a>, Batch KLD with <a href="https://github.com/hellomoto-ai/splatoon2-ml/tree/d0359c8">momentum 0.9</a>, <a href="https://github.com/hellomoto-ai/splatoon2-ml/tree/872495d">momentum 0.1</a> and <a href="https://github.com/hellomoto-ai/splatoon2-ml/tree/9a539af">momentum 0.0</a>.
+</p>
+
+<p>
+  In this experiments, the observations 1 - 4 from the experiment 1 are also observed.
+</p>
+
+<ol>
+  <li>The reconstruction error improved with batch KLD constraint.</li>
+  <div align="center">
+      <img src="{{ site.baseurl }}/assets/2019-06-06/exp2/pixel.svg">
+  </div>
+  <li>When momentum value for Batch KLD is small, the value of KLD for test cases deviate from target KLD.</li>
+  <div align="center">
+      <img src="{{ site.baseurl }}/assets/2019-06-06/exp2/kld.svg">
+  </div>
+  <li>The feature matching error values have become lower with batch KLD.</li>
+  <div align="center">
+      <img src="{{ site.baseurl }}/assets/2019-06-06/exp2/feats.svg">
+  </div>
+  <li>$\beta$ grows larger in Single Point KLD and batch KLD with momentum=0.9.</li>
+  <div align="center">
+      <img src="{{ site.baseurl }}/assets/2019-06-06/exp2/beta.svg">
+  </div>
+</ol>
+
+<p>
+  For this experiment, the distribution of latent parameters show somewhat different trend. Z_STDDEV at the beginning of training (before fake samples start collapse) is more distributed.
+</p>
+
+<div align="center">
+    <figure>
+        <img src="{{ site.baseurl }}/assets/2019-06-06/exp2/latent.svg">
+    </figure>
+</div>
