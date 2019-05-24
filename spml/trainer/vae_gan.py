@@ -219,9 +219,8 @@ class Trainer:
             self.optimizers['decoder'].step()
 
         # KLD
-        z_mean, z_logvar = self.model.vae.encoder(orig)
-        z_std = torch.exp(0.5 * z_logvar)  # for stats recording
-        kld = torch.mean(loss_utils.kld_loss(z_mean, z_logvar))
+        _, latent = self.model.vae.encoder(orig)
+        kld = torch.mean(loss_utils.kld_loss(*latent))
         if update:
             beta_latent_loss = self.beta * kld
             self.model.zero_grad()
@@ -239,7 +238,7 @@ class Trainer:
             'beta': self.beta,
             'feats_recon': feats_loss.item(),
         }
-        stats = _get_latent_stats(z_mean, z_std)
+        stats = _get_latent_stats(*latent)
         return recon, loss, stats
 
     def _get_pixel_loss(self, orig):

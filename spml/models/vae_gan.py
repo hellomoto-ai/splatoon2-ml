@@ -44,7 +44,9 @@ class Encoder(nn.Module):
         z = self.map(x)
         z_mean, z_logvar = z[:, :self.num_latent], z[:, self.num_latent:]
         z_logvar = z_logvar.clamp(max=20)  # For numerical stability
-        return z_mean, z_logvar
+        z_std = torch.exp(0.5 * z_logvar)
+        sample = z_mean + z_std * torch.randn_like(z_std)
+        return sample, (z_mean, z_logvar)
 
 
 class Decoder(nn.Module):
@@ -80,11 +82,9 @@ class VAE(nn.Module):
         self.decoder = decoder
 
     def forward(self, orig):
-        z_mean, z_logvar = self.encoder(orig)
-        z_std = torch.exp(0.5 * z_logvar)
-        sample = z_mean + z_std * torch.randn_like(z_std)
+        sample, latent = self.encoder(orig)
         recon = self.decoder(sample)
-        return recon, (z_mean, z_logvar)
+        return recon, latent
 
 
 class DiscriminatorBlock(nn.Sequential):
