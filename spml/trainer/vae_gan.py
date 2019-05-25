@@ -79,7 +79,7 @@ class Trainer:
             initial_beta=10.0,
             beta_step=0.1,
             target_kld=0.1,
-            beta_momentum=0.9,
+            beta_momentum=0.0,
             samples=None,
     ):
         self.model = model.float().to(device)
